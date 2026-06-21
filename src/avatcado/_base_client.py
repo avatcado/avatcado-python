@@ -4,16 +4,16 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from vatly._errors import VatlyError, _raise_for_error
-from vatly._types import RateLimitInfo
-from vatly._version import __version__
+from avatcado._errors import AvatcadoError, _raise_for_error
+from avatcado._types import RateLimitInfo
+from avatcado._version import __version__
 
 
 def build_headers(api_key: str, request_id: Optional[str] = None) -> Dict[str, str]:
     headers: Dict[str, str] = {
         "Authorization": f"Bearer {api_key}",
         "Accept": "application/json",
-        "User-Agent": f"vatly-python/{__version__}",
+        "User-Agent": f"avatcado-python/{__version__}",
     }
     if request_id is not None:
         headers["X-Request-Id"] = request_id
@@ -37,7 +37,7 @@ def handle_response(response: httpx.Response) -> Dict[str, Any]:
         try:
             body = response.json()
         except Exception:
-            raise VatlyError(
+            raise AvatcadoError(
                 f"HTTP {response.status_code}: {response.reason_phrase}",
                 code="unknown_error",
                 status_code=response.status_code,
@@ -48,7 +48,7 @@ def handle_response(response: httpx.Response) -> Dict[str, Any]:
     try:
         return response.json()  # type: ignore[no-any-return]
     except Exception:
-        raise VatlyError(
+        raise AvatcadoError(
             f"Expected JSON response but received unparseable body (HTTP {response.status_code})",
             code="parse_error",
             status_code=response.status_code,

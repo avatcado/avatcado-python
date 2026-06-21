@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-MOCK_API_KEY = "vtly_live_test123"
-BASE_URL = "https://api.vatly.dev"
+MOCK_API_KEY = "avat_live_test123"
+BASE_URL = "https://api.avatcado.com"
 
 VALID_RESPONSE = {
     "data": {

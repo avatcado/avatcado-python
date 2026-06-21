@@ -5,14 +5,14 @@ import warnings
 from dataclasses import dataclass
 from typing import Optional
 
-from vatly._errors import VatlyError
+from avatcado._errors import AvatcadoError
 
-_DEFAULT_BASE_URL = "https://api.vatly.dev"
+_DEFAULT_BASE_URL = "https://api.avatcado.com"
 _DEFAULT_TIMEOUT = 30.0
 
 
 @dataclass
-class VatlyConfig:
+class AvatcadoConfig:
     api_key: str
     base_url: str
     timeout: float
@@ -23,20 +23,20 @@ class VatlyConfig:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         timeout: Optional[float] = None,
-    ) -> VatlyConfig:
-        resolved_key = api_key or os.environ.get("VATLY_API_KEY", "")
+    ) -> AvatcadoConfig:
+        resolved_key = api_key or os.environ.get("AVATCADO_API_KEY", "")
 
         if not resolved_key:
-            raise VatlyError(
+            raise AvatcadoError(
                 "No API key provided. Pass it to the constructor or set the "
-                "VATLY_API_KEY environment variable.",
+                "AVATCADO_API_KEY environment variable.",
                 code="missing_api_key",
                 status_code=0,
             )
 
-        if not resolved_key.startswith(("vtly_live_", "vtly_test_")):
+        if not resolved_key.startswith(("avat_live_", "avat_test_")):
             warnings.warn(
-                "The API key does not start with 'vtly_live_' or 'vtly_test_'. "
+                "The API key does not start with 'avat_live_' or 'avat_test_'. "
                 "This may indicate an invalid key.",
                 stacklevel=3,
             )

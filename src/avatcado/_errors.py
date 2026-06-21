@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 
-class VatlyError(Exception):
-    """Base exception for all Vatly API errors."""
+class AvatcadoError(Exception):
+    """Base exception for all Avatcado API errors."""
 
     def __init__(
         self,
@@ -27,7 +27,7 @@ class VatlyError(Exception):
         return self.message
 
 
-class AuthenticationError(VatlyError):
+class AuthenticationError(AvatcadoError):
     """Raised for authentication and authorization failures."""
 
     def __init__(
@@ -41,13 +41,13 @@ class AuthenticationError(VatlyError):
         super().__init__(message, code, status_code, request_id, docs_url, None)
 
 
-class ValidationError(VatlyError):
+class ValidationError(AvatcadoError):
     """Raised for request validation failures."""
 
     pass
 
 
-class RateLimitError(VatlyError):
+class RateLimitError(AvatcadoError):
     """Raised when rate or burst limits are exceeded."""
 
     def __init__(
@@ -63,7 +63,7 @@ class RateLimitError(VatlyError):
         self.retry_after = retry_after
 
 
-class UpstreamError(VatlyError):
+class UpstreamError(AvatcadoError):
     """Raised when an upstream tax authority is unavailable."""
 
     def __init__(
@@ -134,4 +134,4 @@ def _raise_for_error(
     if code in _UPSTREAM_CODES:
         raise UpstreamError(message, code, status_code, request_id, docs_url, retry_after)
 
-    raise VatlyError(message, code, status_code, request_id, docs_url, details)
+    raise AvatcadoError(message, code, status_code, request_id, docs_url, details)

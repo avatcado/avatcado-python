@@ -5,14 +5,14 @@ from typing import Optional, Type
 
 import httpx
 
-from vatly._async_resources.async_vat import AsyncVatAsyncResource
-from vatly._async_resources.rates import AsyncRatesResource
-from vatly._async_resources.vat import AsyncVatResource
-from vatly._config import VatlyConfig
+from avatcado._async_resources.async_vat import AsyncVatAsyncResource
+from avatcado._async_resources.rates import AsyncRatesResource
+from avatcado._async_resources.vat import AsyncVatResource
+from avatcado._config import AvatcadoConfig
 
 
-class AsyncVatly:
-    """Asynchronous client for the Vatly VAT validation API."""
+class AsyncAvatcado:
+    """Asynchronous client for the Avatcado VAT validation API."""
 
     vat: AsyncVatResource
     rates: AsyncRatesResource
@@ -25,7 +25,7 @@ class AsyncVatly:
         base_url: Optional[str] = None,
         timeout: Optional[float] = None,
     ) -> None:
-        self._config = VatlyConfig.resolve(api_key, base_url, timeout)
+        self._config = AvatcadoConfig.resolve(api_key, base_url, timeout)
         self._http = httpx.AsyncClient(
             base_url=self._config.base_url,
             timeout=self._config.timeout,
@@ -37,7 +37,7 @@ class AsyncVatly:
     async def close(self) -> None:
         await self._http.aclose()
 
-    async def __aenter__(self) -> AsyncVatly:
+    async def __aenter__(self) -> AsyncAvatcado:
         return self
 
     async def __aexit__(

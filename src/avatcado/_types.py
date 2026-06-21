@@ -11,9 +11,9 @@ def _require_key(data: Dict[str, Any], key: str, context: str) -> Any:
     try:
         return data[key]
     except KeyError:
-        from vatly._errors import VatlyError
+        from avatcado._errors import AvatcadoError
 
-        raise VatlyError(
+        raise AvatcadoError(
             f"Missing required field '{key}' in {context} response",
             code="parse_error",
             status_code=0,

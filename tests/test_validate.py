@@ -4,15 +4,15 @@ import httpx
 import pytest
 import respx
 
-from tests.conftest import BASE_URL, MOCK_API_KEY, RATE_LIMIT_HEADERS, VALID_RESPONSE
-from vatly import (
+from avatcado import (
     AuthenticationError,
+    Avatcado,
+    AvatcadoError,
     RateLimitError,
     UpstreamError,
     ValidationError,
-    Vatly,
-    VatlyError,
 )
+from tests.conftest import BASE_URL, MOCK_API_KEY, RATE_LIMIT_HEADERS, VALID_RESPONSE
 
 
 class TestValidateSuccess:
@@ -21,7 +21,7 @@ class TestValidateSuccess:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.data.valid is True
         assert result.data.vat_number == "NL123456789B01"
@@ -41,7 +41,7 @@ class TestValidateSuccess:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=response, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01", requester_vat_number="DE987654321")
         assert result.data.consultation_number == "WAPIAAAAA1BBBBB"
         client.close()
@@ -52,7 +52,7 @@ class TestValidateSuccess:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=response, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.data.company is None
         client.close()
@@ -69,7 +69,7 @@ class TestValidateSuccess:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=response, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.data.company is not None
         assert result.data.company.address is None
@@ -80,7 +80,7 @@ class TestValidateSuccess:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.data.consultation_number is None
         client.close()
@@ -92,7 +92,7 @@ class TestValidateMeta:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.meta.request_id == "req_abc123"
         assert result.meta.request_duration_ms == 150
@@ -115,7 +115,7 @@ class TestValidateMeta:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=cached, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.meta.cached is True
         assert result.meta.cached_at == "2026-03-18T11:00:00Z"
@@ -139,7 +139,7 @@ class TestValidateMeta:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=stale, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.meta.stale is True
         assert result.meta.source_status == "unavailable"
@@ -162,7 +162,7 @@ class TestValidateMeta:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=test_resp, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.meta.mode == "test"
         client.close()
@@ -176,7 +176,7 @@ class TestValidateMeta:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.meta.source_status == "live"
         client.close()
@@ -190,7 +190,7 @@ class TestValidateMeta:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.meta.source_status == "degraded"
         client.close()
@@ -208,7 +208,7 @@ class TestValidateRateLimit:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=headers)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.rate_limit.limit == 500
         assert result.rate_limit.remaining == 42
@@ -219,7 +219,7 @@ class TestValidateRateLimit:
     @respx.mock(base_url=BASE_URL)
     def test_null_for_absent_headers(self, respx_mock: respx.MockRouter) -> None:
         respx_mock.get("/v1/validate").mock(return_value=httpx.Response(200, json=VALID_RESPONSE))
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.rate_limit.limit is None
         assert result.rate_limit.remaining is None
@@ -236,7 +236,7 @@ class TestValidateRateLimit:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=headers)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.rate_limit.limit is None
         assert result.rate_limit.remaining is None
@@ -252,7 +252,7 @@ class TestValidateRateLimit:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=headers)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.rate_limit.burst_limit == 20
         assert result.rate_limit.burst_remaining == 15
@@ -263,7 +263,7 @@ class TestValidateRateLimit:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.rate_limit.burst_limit is None
         assert result.rate_limit.burst_remaining is None
@@ -276,7 +276,7 @@ class TestValidateRequestParams:
         route = respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate("NL123456789B01", cache=False)
         assert "cache=false" in str(route.calls[0].request.url)
         client.close()
@@ -286,7 +286,7 @@ class TestValidateRequestParams:
         route = respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate("NL123456789B01")
         assert "cache" not in str(route.calls[0].request.url)
         client.close()
@@ -296,7 +296,7 @@ class TestValidateRequestParams:
         route = respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate("NL123456789B01", requester_vat_number="DE987654321")
         assert "requester_vat_number=DE987654321" in str(route.calls[0].request.url)
         client.close()
@@ -306,7 +306,7 @@ class TestValidateRequestParams:
         route = respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate("NL123456789B01", request_id="my-trace-id")
         assert route.calls[0].request.headers["x-request-id"] == "my-trace-id"
         client.close()
@@ -316,7 +316,7 @@ class TestValidateRequestParams:
         route = respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate("NL123456789B01")
         assert route.calls[0].request.headers["authorization"] == f"Bearer {MOCK_API_KEY}"
         client.close()
@@ -326,9 +326,9 @@ class TestValidateRequestParams:
         route = respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate("NL123456789B01")
-        assert route.calls[0].request.headers["user-agent"].startswith("vatly-python/")
+        assert route.calls[0].request.headers["user-agent"].startswith("avatcado-python/")
         client.close()
 
     @respx.mock(base_url=BASE_URL)
@@ -336,7 +336,7 @@ class TestValidateRequestParams:
         route = respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=VALID_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate("  NL123456789B01  ")
         assert "vat_number=NL123456789B01" in str(route.calls[0].request.url)
         client.close()
@@ -344,14 +344,14 @@ class TestValidateRequestParams:
 
 class TestValidateClientSideErrors:
     def test_empty_vat_number(self) -> None:
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(ValidationError, match="vat_number is required") as exc_info:
             client.vat.validate("")
         assert exc_info.value.code == "missing_parameter"
         client.close()
 
     def test_whitespace_vat_number(self) -> None:
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(ValidationError):
             client.vat.validate("   ")
         client.close()
@@ -369,7 +369,7 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(AuthenticationError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "unauthorized"
@@ -388,7 +388,7 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(AuthenticationError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "tier_insufficient"
@@ -405,7 +405,7 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(AuthenticationError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "forbidden"
@@ -422,7 +422,7 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(AuthenticationError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "key_revoked"
@@ -439,7 +439,7 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(ValidationError) as exc_info:
             client.vat.validate("INVALID")
         assert exc_info.value.code == "invalid_vat_format"
@@ -460,7 +460,7 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(ValidationError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.details == [{"field": "vat_number", "message": "must be a string"}]
@@ -477,7 +477,7 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(ValidationError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "invalid_json"
@@ -498,7 +498,7 @@ class TestValidateErrors:
                 headers={"retry-after": "30"},
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(RateLimitError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.retry_after == 30.0
@@ -520,7 +520,7 @@ class TestValidateErrors:
                 headers={"retry-after": "5"},
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(RateLimitError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "burst_limit_exceeded"
@@ -542,7 +542,7 @@ class TestValidateErrors:
                 headers={"retry-after": "60"},
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(UpstreamError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.retry_after == 60.0
@@ -562,7 +562,7 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(UpstreamError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "upstream_member_state_unavailable"
@@ -577,16 +577,16 @@ class TestValidateErrors:
                     "error": {
                         "message": "Invalid VAT format",
                         "code": "invalid_vat_format",
-                        "docs_url": "https://docs.vatly.dev/errors/invalid_vat_format",
+                        "docs_url": "https://docs.avatcado.com/errors/invalid_vat_format",
                     },
                     "meta": {"request_id": "req_err5"},
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(ValidationError) as exc_info:
             client.vat.validate("INVALID")
-        assert exc_info.value.docs_url == "https://docs.vatly.dev/errors/invalid_vat_format"
+        assert exc_info.value.docs_url == "https://docs.avatcado.com/errors/invalid_vat_format"
         client.close()
 
     @respx.mock(base_url=BASE_URL)
@@ -600,8 +600,8 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert not isinstance(exc_info.value, AuthenticationError)
         assert not isinstance(exc_info.value, ValidationError)
@@ -622,8 +622,8 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert not isinstance(exc_info.value, AuthenticationError)
         assert exc_info.value.code == "key_limit_reached"
@@ -640,7 +640,7 @@ class TestValidateErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(AuthenticationError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.details is None
@@ -655,8 +655,8 @@ class TestValidateErrors:
                 headers={"x-request-id": "req_from_header"},
             )
         )
-        client = Vatly(MOCK_API_KEY)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.request_id == "req_from_header"
         client.close()
@@ -666,8 +666,8 @@ class TestValidateNetworkErrors:
     @respx.mock(base_url=BASE_URL)
     def test_timeout(self, respx_mock: respx.MockRouter) -> None:
         respx_mock.get("/v1/validate").mock(side_effect=httpx.ReadTimeout("timed out"))
-        client = Vatly(MOCK_API_KEY, timeout=1.0)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY, timeout=1.0)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "timeout"
         assert exc_info.value.status_code == 0
@@ -676,8 +676,8 @@ class TestValidateNetworkErrors:
     @respx.mock(base_url=BASE_URL)
     def test_network_error(self, respx_mock: respx.MockRouter) -> None:
         respx_mock.get("/v1/validate").mock(side_effect=httpx.ConnectError("connection refused"))
-        client = Vatly(MOCK_API_KEY)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "network_error"
         assert exc_info.value.status_code == 0
@@ -692,8 +692,8 @@ class TestValidateNetworkErrors:
                 headers={"x-request-id": "req_proxy"},
             )
         )
-        client = Vatly(MOCK_API_KEY)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "parse_error"
         assert exc_info.value.status_code == 200
@@ -705,8 +705,8 @@ class TestValidateNetworkErrors:
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(502, text="<html>Bad Gateway</html>")
         )
-        client = Vatly(MOCK_API_KEY)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.vat.validate("NL123456789B01")
         assert exc_info.value.code == "unknown_error"
         assert exc_info.value.status_code == 502

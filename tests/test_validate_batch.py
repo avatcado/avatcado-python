@@ -6,15 +6,15 @@ import httpx
 import pytest
 import respx
 
-from tests.conftest import BASE_URL, BATCH_RESPONSE, MOCK_API_KEY, RATE_LIMIT_HEADERS
-from vatly import (
+from avatcado import (
     AuthenticationError,
+    Avatcado,
+    AvatcadoError,
     RateLimitError,
     ValidationError,
-    Vatly,
-    VatlyError,
     is_batch_success,
 )
+from tests.conftest import BASE_URL, BATCH_RESPONSE, MOCK_API_KEY, RATE_LIMIT_HEADERS
 
 
 class TestBatchValidateSuccess:
@@ -23,7 +23,7 @@ class TestBatchValidateSuccess:
         route = respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=BATCH_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate_batch(["NL123456789B01", "DE987654321"])
         assert len(result.results) == 2
         assert result.summary.total == 2
@@ -73,7 +73,7 @@ class TestBatchValidateSuccess:
         respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=mixed, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate_batch(["NL123456789B01", "XX000000000"])
         assert len(result.results) == 2
         assert result.summary.succeeded == 1
@@ -107,7 +107,7 @@ class TestBatchValidateSuccess:
         respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=all_fail, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate_batch(["XX1", "XX2"])
         assert result.summary.failed == 2
         assert all(not is_batch_success(r) for r in result.results)
@@ -120,7 +120,7 @@ class TestBatchRequestParams:
         route = respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=BATCH_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate_batch(["NL123456789B01"], requester_vat_number="DE987654321")
         body = json.loads(route.calls[0].request.content)
         assert body["requester_vat_number"] == "DE987654321"
@@ -131,7 +131,7 @@ class TestBatchRequestParams:
         route = respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=BATCH_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate_batch(["NL123456789B01"], cache=False)
         body = json.loads(route.calls[0].request.content)
         assert body["cache"] is False
@@ -142,7 +142,7 @@ class TestBatchRequestParams:
         route = respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=BATCH_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate_batch(["NL123456789B01"], request_id="batch-trace-123")
         assert route.calls[0].request.headers["x-request-id"] == "batch-trace-123"
         client.close()
@@ -152,7 +152,7 @@ class TestBatchRequestParams:
         route = respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=BATCH_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate_batch(["  NL123456789B01  ", " DE987654321 "])
         body = json.loads(route.calls[0].request.content)
         assert body["vat_numbers"] == ["NL123456789B01", "DE987654321"]
@@ -168,7 +168,7 @@ class TestBatchRequestParams:
         respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=BATCH_RESPONSE, headers=headers)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate_batch(["NL123456789B01"])
         assert result.rate_limit.limit == 50
         assert result.rate_limit.remaining == 48
@@ -209,11 +209,11 @@ class TestBatchPerItemMeta:
         respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate_batch(["NL123456789B01"])
         item = result.results[0]
         assert is_batch_success(item)
-        from vatly import BatchResultSuccess
+        from avatcado import BatchResultSuccess
 
         assert isinstance(item, BatchResultSuccess)
         assert item.meta.source_status == "live"
@@ -222,14 +222,14 @@ class TestBatchPerItemMeta:
 
 class TestBatchClientSideErrors:
     def test_empty_list(self) -> None:
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(ValidationError) as exc_info:
             client.vat.validate_batch([])
         assert exc_info.value.code == "missing_parameter"
         client.close()
 
     def test_exceeds_50(self) -> None:
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         vat_numbers = [f"NL{str(i).zfill(9)}B01" for i in range(51)]
         with pytest.raises(ValidationError) as exc_info:
             client.vat.validate_batch(vat_numbers)
@@ -242,7 +242,7 @@ class TestBatchClientSideErrors:
         respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=BATCH_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         vat_numbers = [f"NL{str(i).zfill(9)}B01" for i in range(50)]
         result = client.vat.validate_batch(vat_numbers)
         assert result is not None
@@ -261,7 +261,7 @@ class TestBatchApiErrors:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(AuthenticationError) as exc_info:
             client.vat.validate_batch(["NL123456789B01"])
         assert exc_info.value.code == "tier_insufficient"
@@ -282,7 +282,7 @@ class TestBatchApiErrors:
                 headers={"retry-after": "15"},
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(RateLimitError) as exc_info:
             client.vat.validate_batch(["NL123456789B01"])
         assert exc_info.value.retry_after == 15.0
@@ -293,8 +293,8 @@ class TestBatchNetworkErrors:
     @respx.mock(base_url=BASE_URL)
     def test_timeout(self, respx_mock: respx.MockRouter) -> None:
         respx_mock.post("/v1/validate/batch").mock(side_effect=httpx.ReadTimeout("timed out"))
-        client = Vatly(MOCK_API_KEY)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.vat.validate_batch(["NL123456789B01"])
         assert exc_info.value.code == "timeout"
         assert exc_info.value.status_code == 0
@@ -305,8 +305,8 @@ class TestBatchNetworkErrors:
         respx_mock.post("/v1/validate/batch").mock(
             side_effect=httpx.ConnectError("connection refused")
         )
-        client = Vatly(MOCK_API_KEY)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.vat.validate_batch(["NL123456789B01"])
         assert exc_info.value.code == "network_error"
         client.close()
@@ -316,8 +316,8 @@ class TestBatchNetworkErrors:
         respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(502, text="<html>Bad Gateway</html>")
         )
-        client = Vatly(MOCK_API_KEY)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.vat.validate_batch(["NL123456789B01"])
         assert exc_info.value.code == "unknown_error"
         assert exc_info.value.status_code == 502
@@ -330,7 +330,7 @@ class TestBatchContentType:
         route = respx_mock.post("/v1/validate/batch").mock(
             return_value=httpx.Response(200, json=BATCH_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.vat.validate_batch(["NL123456789B01"])
         content_type = route.calls[0].request.headers["content-type"]
         assert "application/json" in content_type

@@ -1,13 +1,13 @@
-from vatly._async_client import AsyncVatly
-from vatly._client import Vatly
-from vatly._errors import (
+from avatcado._async_client import AsyncAvatcado
+from avatcado._client import Avatcado
+from avatcado._errors import (
     AuthenticationError,
+    AvatcadoError,
     RateLimitError,
     UpstreamError,
     ValidationError,
-    VatlyError,
 )
-from vatly._types import (
+from avatcado._types import (
     AsyncBatchData,
     AsyncBatchRejectedItem,
     AsyncBatchValidateResponse,
@@ -34,7 +34,7 @@ from vatly._types import (
     VatValidationResult,
     is_batch_success,
 )
-from vatly._version import __version__
+from avatcado._version import __version__
 
 __all__ = [
     "AsyncBatchData",
@@ -43,7 +43,7 @@ __all__ = [
     "AsyncMeta",
     "AsyncValidateData",
     "AsyncValidateResponse",
-    "AsyncVatly",
+    "AsyncAvatcado",
     "AuthenticationError",
     "BatchErrorDetail",
     "BatchErrorMeta",
@@ -64,8 +64,8 @@ __all__ = [
     "UpstreamError",
     "ValidateResponse",
     "ValidationError",
-    "Vatly",
-    "VatlyError",
+    "Avatcado",
+    "AvatcadoError",
     "VatRate",
     "VatValidationResult",
     "__version__",

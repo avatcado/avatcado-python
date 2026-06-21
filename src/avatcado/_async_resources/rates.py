@@ -4,10 +4,10 @@ from urllib.parse import quote
 
 import httpx
 
-from vatly._base_client import build_headers, handle_response, parse_rate_limit
-from vatly._config import VatlyConfig
-from vatly._errors import VatlyError
-from vatly._types import (
+from avatcado._base_client import build_headers, handle_response, parse_rate_limit
+from avatcado._config import AvatcadoConfig
+from avatcado._errors import AvatcadoError
+from avatcado._types import (
     GetRateResponse,
     ListRatesResponse,
     ResponseMeta,
@@ -16,7 +16,7 @@ from vatly._types import (
 
 
 class AsyncRatesResource:
-    def __init__(self, http: httpx.AsyncClient, config: VatlyConfig) -> None:
+    def __init__(self, http: httpx.AsyncClient, config: AvatcadoConfig) -> None:
         self._http = http
         self._config = config
 
@@ -27,13 +27,13 @@ class AsyncRatesResource:
                 headers=build_headers(self._config.api_key),
             )
         except httpx.TimeoutException:
-            raise VatlyError(
+            raise AvatcadoError(
                 f"Request timed out after {self._config.timeout}s",
                 code="timeout",
                 status_code=0,
             )
         except httpx.HTTPError as exc:
-            raise VatlyError(str(exc), code="network_error", status_code=0)
+            raise AvatcadoError(str(exc), code="network_error", status_code=0)
 
         data = handle_response(response)
         return ListRatesResponse(
@@ -49,13 +49,13 @@ class AsyncRatesResource:
                 headers=build_headers(self._config.api_key),
             )
         except httpx.TimeoutException:
-            raise VatlyError(
+            raise AvatcadoError(
                 f"Request timed out after {self._config.timeout}s",
                 code="timeout",
                 status_code=0,
             )
         except httpx.HTTPError as exc:
-            raise VatlyError(str(exc), code="network_error", status_code=0)
+            raise AvatcadoError(str(exc), code="network_error", status_code=0)
 
         data = handle_response(response)
         return GetRateResponse(

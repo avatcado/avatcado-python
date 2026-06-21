@@ -4,6 +4,7 @@ import httpx
 import pytest
 import respx
 
+from avatcado import AuthenticationError, Avatcado, AvatcadoError, RateLimitError
 from tests.conftest import (
     BASE_URL,
     GET_RATE_RESPONSE,
@@ -11,7 +12,6 @@ from tests.conftest import (
     MOCK_API_KEY,
     RATE_LIMIT_HEADERS,
 )
-from vatly import AuthenticationError, RateLimitError, Vatly, VatlyError
 
 
 class TestListRates:
@@ -20,7 +20,7 @@ class TestListRates:
         respx_mock.get("/v1/rates").mock(
             return_value=httpx.Response(200, json=LIST_RATES_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.rates.list()
         assert len(result.data) == 2
         assert result.data[0].country_code == "NL"
@@ -42,7 +42,7 @@ class TestListRates:
         respx_mock.get("/v1/rates").mock(
             return_value=httpx.Response(200, json=LIST_RATES_RESPONSE, headers=headers)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.rates.list()
         assert result.rate_limit.limit == 200
         assert result.rate_limit.remaining == 199
@@ -53,7 +53,7 @@ class TestListRates:
         route = respx_mock.get("/v1/rates").mock(
             return_value=httpx.Response(200, json=LIST_RATES_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.rates.list()
         assert route.called
         client.close()
@@ -69,7 +69,7 @@ class TestListRates:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(AuthenticationError):
             client.rates.list()
         client.close()
@@ -89,7 +89,7 @@ class TestListRates:
                 headers={"retry-after": "20"},
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(RateLimitError) as exc_info:
             client.rates.list()
         assert exc_info.value.retry_after == 20.0
@@ -102,7 +102,7 @@ class TestGetRate:
         respx_mock.get("/v1/rates/NL").mock(
             return_value=httpx.Response(200, json=GET_RATE_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         result = client.rates.get("NL")
         assert result.data.country_code == "NL"
         assert result.data.country_name == "Netherlands"
@@ -116,7 +116,7 @@ class TestGetRate:
         route = respx_mock.get("/v1/rates/NL").mock(
             return_value=httpx.Response(200, json=GET_RATE_RESPONSE, headers=RATE_LIMIT_HEADERS)
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         client.rates.get("NL")
         assert route.called
         client.close()
@@ -132,7 +132,7 @@ class TestGetRate:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(AuthenticationError):
             client.rates.get("NL")
         client.close()
@@ -148,8 +148,8 @@ class TestGetRate:
                 },
             )
         )
-        client = Vatly(MOCK_API_KEY)
-        with pytest.raises(VatlyError) as exc_info:
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
             client.rates.get("ZZ")
         assert exc_info.value.code == "not_found"
         assert exc_info.value.status_code == 404
@@ -170,7 +170,7 @@ class TestGetRate:
                 headers={"retry-after": "10"},
             )
         )
-        client = Vatly(MOCK_API_KEY)
+        client = Avatcado(MOCK_API_KEY)
         with pytest.raises(RateLimitError):
             client.rates.get("NL")
         client.close()

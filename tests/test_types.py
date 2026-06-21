@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from vatly import (
+from avatcado import (
+    AvatcadoError,
     BatchErrorDetail,
     BatchErrorMeta,
     BatchItemMeta,
@@ -11,7 +12,6 @@ from vatly import (
     BatchSummary,
     Company,
     ResponseMeta,
-    VatlyError,
     VatRate,
     VatValidationResult,
     is_batch_success,
@@ -180,31 +180,31 @@ class TestVatRate:
 
 class TestFromDictMissingRequiredField:
     def test_company_missing_name(self) -> None:
-        with pytest.raises(VatlyError) as exc_info:
+        with pytest.raises(AvatcadoError) as exc_info:
             Company.from_dict({})
         assert exc_info.value.code == "parse_error"
         assert "name" in exc_info.value.message
 
     def test_validation_result_missing_valid(self) -> None:
-        with pytest.raises(VatlyError) as exc_info:
+        with pytest.raises(AvatcadoError) as exc_info:
             VatValidationResult.from_dict({"vat_number": "NL123", "country_code": "NL"})
         assert exc_info.value.code == "parse_error"
         assert "valid" in exc_info.value.message
 
     def test_response_meta_missing_request_id(self) -> None:
-        with pytest.raises(VatlyError) as exc_info:
+        with pytest.raises(AvatcadoError) as exc_info:
             ResponseMeta.from_dict({})
         assert exc_info.value.code == "parse_error"
         assert "request_id" in exc_info.value.message
 
     def test_batch_summary_missing_total(self) -> None:
-        with pytest.raises(VatlyError) as exc_info:
+        with pytest.raises(AvatcadoError) as exc_info:
             BatchSummary.from_dict({"succeeded": 1, "failed": 0})
         assert exc_info.value.code == "parse_error"
         assert "total" in exc_info.value.message
 
     def test_vat_rate_missing_country_code(self) -> None:
-        with pytest.raises(VatlyError) as exc_info:
+        with pytest.raises(AvatcadoError) as exc_info:
             VatRate.from_dict({"country_name": "NL", "currency": "EUR"})
         assert exc_info.value.code == "parse_error"
 
