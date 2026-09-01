@@ -120,12 +120,28 @@ class BatchItemMeta:
 
 @dataclass
 class BatchErrorDetail:
+    """Error for a single failed item in a batch validation.
+
+    ``vat_number`` is the normalized VAT number of the failed item. It is populated from
+    the item's ``error.vat_number`` and, for older API responses, from the deprecated
+    ``meta.vat_number``. It is ``None`` only when an instance is constructed manually.
+    """
+
     code: str
     message: str
+    vat_number: Optional[str] = None
 
 
 @dataclass
 class BatchErrorMeta:
+    """Per-item metadata for a failed batch entry.
+
+    .. deprecated:: 0.5.0
+        ``vat_number`` is deprecated in favour of ``BatchErrorDetail.vat_number``
+        (``item.error.vat_number``). It remains populated for backward compatibility and
+        will be removed in a future major version.
+    """
+
     vat_number: str
 
 
@@ -150,15 +166,23 @@ class BatchResultError:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> BatchResultError:
         error_data = _require_key(data, "error", "BatchResultError")
-        meta_data = _require_key(data, "meta", "BatchResultError")
+        meta_raw = data.get("meta")
+        meta_data: Dict[str, Any] = meta_raw if isinstance(meta_raw, dict) else {}
+        # Newer API versions echo the normalized VAT number inside ``error``; older
+        # responses only carry it in the (now deprecated) ``meta`` object.
+        error_vat: Optional[str] = error_data.get("vat_number")
+        meta_vat: Optional[str] = meta_data.get("vat_number")
+        if error_vat is not None:
+            vat_number: str = error_vat
+        else:
+            vat_number = _require_key(meta_data, "vat_number", "BatchErrorMeta")
         return cls(
             error=BatchErrorDetail(
                 code=_require_key(error_data, "code", "BatchErrorDetail"),
                 message=_require_key(error_data, "message", "BatchErrorDetail"),
+                vat_number=vat_number,
             ),
-            meta=BatchErrorMeta(
-                vat_number=_require_key(meta_data, "vat_number", "BatchErrorMeta"),
-            ),
+            meta=BatchErrorMeta(vat_number=meta_vat if meta_vat is not None else vat_number),
         )
 
 

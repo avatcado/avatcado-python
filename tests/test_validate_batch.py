@@ -10,6 +10,7 @@ from avatcado import (
     AuthenticationError,
     Avatcado,
     AvatcadoError,
+    BatchResultError,
     RateLimitError,
     ValidationError,
     is_batch_success,
@@ -217,6 +218,75 @@ class TestBatchPerItemMeta:
 
         assert isinstance(item, BatchResultSuccess)
         assert item.meta.source_status == "live"
+        client.close()
+
+
+class TestBatchItemErrorContext:
+    @respx.mock(base_url=BASE_URL)
+    def test_error_item_exposes_vat_number_from_error_object(
+        self, respx_mock: respx.MockRouter
+    ) -> None:
+        resp = {
+            "data": {
+                "results": [
+                    {
+                        "error": {
+                            "code": "invalid_vat_format",
+                            "message": "Invalid VAT format",
+                            "vat_number": "XX000000000",
+                        },
+                        "meta": {"vat_number": "XX000000000"},
+                    },
+                ],
+                "summary": {"total": 1, "succeeded": 0, "failed": 1},
+            },
+            "meta": {
+                "request_id": "req_batch_ctx",
+                "mode": None,
+                "request_duration_ms": 50,
+            },
+        }
+        respx_mock.post("/v1/validate/batch").mock(
+            return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
+        )
+        client = Avatcado(MOCK_API_KEY)
+        result = client.vat.validate_batch(["XX000000000"])
+        item = result.results[0]
+        assert isinstance(item, BatchResultError)
+        assert item.error.vat_number == "XX000000000"
+        assert item.meta.vat_number == "XX000000000"
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_error_item_falls_back_to_deprecated_meta_vat_number(
+        self, respx_mock: respx.MockRouter
+    ) -> None:
+        # Older API responses omit error.vat_number
+        resp = {
+            "data": {
+                "results": [
+                    {
+                        "error": {"code": "invalid_vat_format", "message": "Invalid VAT format"},
+                        "meta": {"vat_number": "XX000000000"},
+                    },
+                ],
+                "summary": {"total": 1, "succeeded": 0, "failed": 1},
+            },
+            "meta": {
+                "request_id": "req_batch_old",
+                "mode": None,
+                "request_duration_ms": 50,
+            },
+        }
+        respx_mock.post("/v1/validate/batch").mock(
+            return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
+        )
+        client = Avatcado(MOCK_API_KEY)
+        result = client.vat.validate_batch(["XX000000000"])
+        item = result.results[0]
+        assert isinstance(item, BatchResultError)
+        assert item.error.vat_number == "XX000000000"
+        assert item.meta.vat_number == "XX000000000"
         client.close()
 
 

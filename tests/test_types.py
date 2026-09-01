@@ -132,6 +132,57 @@ class TestBatchTypes:
         assert s.succeeded == 2
         assert s.failed == 1
 
+    def test_batch_result_error_prefers_error_vat_number(self) -> None:
+        item = BatchResultError.from_dict(
+            {
+                "error": {
+                    "code": "invalid_vat_format",
+                    "message": "Invalid",
+                    "vat_number": "XX000",
+                },
+                "meta": {"vat_number": "XX000"},
+            }
+        )
+        assert item.error.vat_number == "XX000"
+        assert item.meta.vat_number == "XX000"
+
+    def test_batch_result_error_falls_back_to_meta_vat_number(self) -> None:
+        # Older API responses only carry meta.vat_number
+        item = BatchResultError.from_dict(
+            {
+                "error": {"code": "invalid_vat_format", "message": "Invalid"},
+                "meta": {"vat_number": "XX000"},
+            }
+        )
+        assert item.error.vat_number == "XX000"
+        assert item.meta.vat_number == "XX000"
+
+    def test_batch_result_error_meta_falls_back_to_error_vat_number(self) -> None:
+        # If the deprecated meta.vat_number is ever dropped, meta still resolves
+        item = BatchResultError.from_dict(
+            {
+                "error": {
+                    "code": "invalid_vat_format",
+                    "message": "Invalid",
+                    "vat_number": "XX000",
+                },
+                "meta": {},
+            }
+        )
+        assert item.error.vat_number == "XX000"
+        assert item.meta.vat_number == "XX000"
+
+    def test_batch_result_error_without_any_vat_number_raises_parse_error(self) -> None:
+        with pytest.raises(AvatcadoError) as exc_info:
+            BatchResultError.from_dict(
+                {"error": {"code": "invalid_vat_format", "message": "Invalid"}, "meta": {}}
+            )
+        assert exc_info.value.code == "parse_error"
+
+    def test_batch_error_detail_constructible_without_vat_number(self) -> None:
+        detail = BatchErrorDetail(code="invalid_vat_format", message="Invalid")
+        assert detail.vat_number is None
+
 
 class TestIsBatchSuccess:
     def test_returns_true_for_success(self) -> None:

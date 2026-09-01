@@ -4,7 +4,16 @@ from typing import Any, Dict, List, Optional
 
 
 class AvatcadoError(Exception):
-    """Base exception for all Avatcado API errors."""
+    """Base exception for all Avatcado API errors.
+
+    ``vat_number`` and ``requester_vat_number`` echo the normalized VAT numbers from the
+    failed request when the API supplies them (validation, rate-limit, upstream and
+    server errors from the single-number validation endpoints, plus ``tier_insufficient``
+    and ``webhook_not_configured`` from the async endpoint). They are ``None`` when the
+    API rejected the request before reading it (``unauthorized``, ``forbidden``,
+    ``key_revoked``), on batch-level errors, on client-side errors, when no VAT number
+    was submitted, and on responses from API versions that predate these fields.
+    """
 
     def __init__(
         self,
@@ -14,6 +23,8 @@ class AvatcadoError(Exception):
         request_id: Optional[str] = None,
         docs_url: str = "",
         details: Optional[List[Dict[str, str]]] = None,
+        vat_number: Optional[str] = None,
+        requester_vat_number: Optional[str] = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -22,6 +33,8 @@ class AvatcadoError(Exception):
         self.request_id = request_id
         self.docs_url = docs_url
         self.details = details
+        self.vat_number = vat_number
+        self.requester_vat_number = requester_vat_number
 
     def __str__(self) -> str:
         return self.message
@@ -37,8 +50,19 @@ class AuthenticationError(AvatcadoError):
         status_code: int = 0,
         request_id: Optional[str] = None,
         docs_url: str = "",
+        vat_number: Optional[str] = None,
+        requester_vat_number: Optional[str] = None,
     ) -> None:
-        super().__init__(message, code, status_code, request_id, docs_url, None)
+        super().__init__(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            details=None,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+        )
 
 
 class ValidationError(AvatcadoError):
@@ -58,13 +82,29 @@ class RateLimitError(AvatcadoError):
         request_id: Optional[str] = None,
         docs_url: str = "",
         retry_after: Optional[float] = None,
+        vat_number: Optional[str] = None,
+        requester_vat_number: Optional[str] = None,
     ) -> None:
-        super().__init__(message, code, status_code, request_id, docs_url, None)
+        super().__init__(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            details=None,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+        )
         self.retry_after = retry_after
 
 
 class UpstreamError(AvatcadoError):
-    """Raised when an upstream tax authority is unavailable."""
+    """Raised when an upstream tax authority is unavailable.
+
+    ``validation_id`` identifies the recorded failed validation attempt. The API sends it
+    only for ``upstream_unavailable`` and ``upstream_member_state_unavailable``, never in
+    test mode, and only when the attempt could be recorded; it is ``None`` otherwise.
+    """
 
     def __init__(
         self,
@@ -74,9 +114,22 @@ class UpstreamError(AvatcadoError):
         request_id: Optional[str] = None,
         docs_url: str = "",
         retry_after: Optional[float] = None,
+        vat_number: Optional[str] = None,
+        requester_vat_number: Optional[str] = None,
+        validation_id: Optional[str] = None,
     ) -> None:
-        super().__init__(message, code, status_code, request_id, docs_url, None)
+        super().__init__(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            details=None,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+        )
         self.retry_after = retry_after
+        self.validation_id = validation_id
 
 
 _AUTHENTICATION_CODES = frozenset(
@@ -112,6 +165,9 @@ def _raise_for_error(
     details: Optional[List[Dict[str, str]]] = (
         details_raw if isinstance(details_raw, list) else None
     )
+    vat_number: Optional[str] = error_obj.get("vat_number")
+    requester_vat_number: Optional[str] = error_obj.get("requester_vat_number")
+    validation_id: Optional[str] = meta.get("validation_id")
 
     request_id: Optional[str] = meta.get("request_id")
     if request_id is None and hasattr(headers, "get"):
@@ -126,12 +182,57 @@ def _raise_for_error(
             pass
 
     if code in _AUTHENTICATION_CODES:
-        raise AuthenticationError(message, code, status_code, request_id, docs_url)
+        raise AuthenticationError(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+        )
     if code in _VALIDATION_CODES:
-        raise ValidationError(message, code, status_code, request_id, docs_url, details)
+        raise ValidationError(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            details=details,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+        )
     if code in _RATE_LIMIT_CODES:
-        raise RateLimitError(message, code, status_code, request_id, docs_url, retry_after)
+        raise RateLimitError(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            retry_after=retry_after,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+        )
     if code in _UPSTREAM_CODES:
-        raise UpstreamError(message, code, status_code, request_id, docs_url, retry_after)
+        raise UpstreamError(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            retry_after=retry_after,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+            validation_id=validation_id,
+        )
 
-    raise AvatcadoError(message, code, status_code, request_id, docs_url, details)
+    raise AvatcadoError(
+        message,
+        code=code,
+        status_code=status_code,
+        request_id=request_id,
+        docs_url=docs_url,
+        details=details,
+        vat_number=vat_number,
+        requester_vat_number=requester_vat_number,
+    )

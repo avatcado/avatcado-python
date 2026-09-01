@@ -661,6 +661,176 @@ class TestValidateErrors:
         assert exc_info.value.request_id == "req_from_header"
         client.close()
 
+    @respx.mock(base_url=BASE_URL)
+    def test_upstream_error_echoes_request_context(self, respx_mock: respx.MockRouter) -> None:
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(
+                503,
+                json={
+                    "error": {
+                        "code": "upstream_unavailable",
+                        "message": "The upstream VAT validation service is unavailable",
+                        "docs_url": "https://docs.avatcado.com/errors/upstream_unavailable",
+                        "vat_number": "SE556677889901",
+                        "requester_vat_number": "NL861234567B01",
+                    },
+                    "meta": {
+                        "request_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "validation_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                    },
+                },
+                headers={"retry-after": "60"},
+            )
+        )
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(UpstreamError) as exc_info:
+            client.vat.validate("SE556677889901")
+        err = exc_info.value
+        assert err.vat_number == "SE556677889901"
+        assert err.requester_vat_number == "NL861234567B01"
+        assert err.validation_id == "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+        assert err.request_id == "550e8400-e29b-41d4-a716-446655440000"
+        assert err.docs_url == "https://docs.avatcado.com/errors/upstream_unavailable"
+        assert err.retry_after == 60.0
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_upstream_error_from_older_server_has_none_context(
+        self, respx_mock: respx.MockRouter
+    ) -> None:
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(
+                503,
+                json={
+                    "error": {"message": "VIES is unavailable", "code": "upstream_unavailable"},
+                    "meta": {"request_id": "req_old_server"},
+                },
+            )
+        )
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(UpstreamError) as exc_info:
+            client.vat.validate("NL123456789B01")
+        assert exc_info.value.vat_number is None
+        assert exc_info.value.requester_vat_number is None
+        assert exc_info.value.validation_id is None
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_rate_limit_error_echoes_vat_number(self, respx_mock: respx.MockRouter) -> None:
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(
+                429,
+                json={
+                    "error": {
+                        "message": "Rate limit exceeded",
+                        "code": "rate_limit_exceeded",
+                        "vat_number": "NL123456789B01",
+                    },
+                    "meta": {"request_id": "req_rl_ctx"},
+                },
+                headers={"retry-after": "30"},
+            )
+        )
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(RateLimitError) as exc_info:
+            client.vat.validate("NL123456789B01")
+        assert exc_info.value.vat_number == "NL123456789B01"
+        assert exc_info.value.requester_vat_number is None
+        assert exc_info.value.retry_after == 30.0
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_validation_error_echoes_vat_number_and_details(
+        self, respx_mock: respx.MockRouter
+    ) -> None:
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(
+                400,
+                json={
+                    "error": {
+                        "message": "Validation failed",
+                        "code": "validation_error",
+                        "vat_number": "XX000",
+                        "details": [
+                            {"field": "vat_number", "message": "must match a country format"}
+                        ],
+                    },
+                    "meta": {"request_id": "req_val_ctx"},
+                },
+            )
+        )
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(ValidationError) as exc_info:
+            client.vat.validate("XX000")
+        assert exc_info.value.vat_number == "XX000"
+        assert exc_info.value.details == [
+            {"field": "vat_number", "message": "must match a country format"}
+        ]
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_authentication_error_has_none_request_context(
+        self, respx_mock: respx.MockRouter
+    ) -> None:
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(
+                401,
+                json={
+                    "error": {"message": "Invalid API key", "code": "unauthorized"},
+                    "meta": {"request_id": "req_auth_ctx"},
+                },
+            )
+        )
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AuthenticationError) as exc_info:
+            client.vat.validate("NL123456789B01")
+        assert exc_info.value.vat_number is None
+        assert exc_info.value.requester_vat_number is None
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_internal_error_echoes_vat_number_on_base_class(
+        self, respx_mock: respx.MockRouter
+    ) -> None:
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(
+                500,
+                json={
+                    "error": {
+                        "message": "Internal server error",
+                        "code": "internal_error",
+                        "vat_number": "NL123456789B01",
+                    },
+                    "meta": {"request_id": "req_500_ctx"},
+                },
+            )
+        )
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AvatcadoError) as exc_info:
+            client.vat.validate("NL123456789B01")
+        assert type(exc_info.value) is AvatcadoError
+        assert exc_info.value.vat_number == "NL123456789B01"
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_validation_id_is_not_exposed_on_non_upstream_errors(
+        self, respx_mock: respx.MockRouter
+    ) -> None:
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(
+                429,
+                json={
+                    "error": {"message": "Rate limit exceeded", "code": "rate_limit_exceeded"},
+                    "meta": {"request_id": "req_rl_vid", "validation_id": "should-be-ignored"},
+                },
+            )
+        )
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(RateLimitError) as exc_info:
+            client.vat.validate("NL123456789B01")
+        assert not hasattr(exc_info.value, "validation_id")
+        client.close()
+
 
 class TestValidateNetworkErrors:
     @respx.mock(base_url=BASE_URL)

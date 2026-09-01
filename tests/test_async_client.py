@@ -9,6 +9,7 @@ from avatcado import (
     AuthenticationError,
     AvatcadoError,
     RateLimitError,
+    UpstreamError,
     ValidationError,
     is_batch_success,
 )
@@ -65,6 +66,34 @@ class TestAsyncValidate:
             with pytest.raises(AvatcadoError) as exc_info:
                 await client.vat.validate("NL123456789B01")
             assert exc_info.value.code == "timeout"
+
+    @respx.mock(base_url=BASE_URL)
+    async def test_validate_upstream_error_echoes_context(
+        self, respx_mock: respx.MockRouter
+    ) -> None:
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(
+                503,
+                json={
+                    "error": {
+                        "code": "upstream_unavailable",
+                        "message": "Upstream unavailable",
+                        "vat_number": "SE556677889901",
+                        "requester_vat_number": "NL861234567B01",
+                    },
+                    "meta": {
+                        "request_id": "req_async_up",
+                        "validation_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                    },
+                },
+            )
+        )
+        async with AsyncAvatcado(MOCK_API_KEY) as client:
+            with pytest.raises(UpstreamError) as exc_info:
+                await client.vat.validate("SE556677889901")
+            assert exc_info.value.vat_number == "SE556677889901"
+            assert exc_info.value.requester_vat_number == "NL861234567B01"
+            assert exc_info.value.validation_id == "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 
 
 class TestAsyncBatch:

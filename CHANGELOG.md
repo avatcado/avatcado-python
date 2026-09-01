@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+Error responses now echo the submitted VAT request context. Additive — no breaking changes.
+
+- `AvatcadoError` (and every subclass) gains `vat_number` and `requester_vat_number`: the normalized VAT numbers from the failed request, echoed by the API on validation, rate-limit, upstream and server errors from the single-number validation endpoints (and on `tier_insufficient` / `webhook_not_configured` from the async endpoint). `None` on `unauthorized` / `forbidden` / `key_revoked`, on batch-level errors, when nothing was submitted, and on older API responses
+- `UpstreamError` gains `validation_id`: the identifier of the recorded failed validation attempt (`upstream_unavailable` / `upstream_member_state_unavailable` only; never in test mode)
+- `details` (list of `{"field", "message"}` dicts) is now part of the documented error schema for `validation_error` responses; its type is unchanged
+- Batch: `BatchErrorDetail` gains `vat_number` (normalized), read from the item's `error.vat_number` with a fallback to `meta.vat_number` for older responses (the new field also appears in `repr()` / `dataclasses.asdict()` output)
+- Batch: `BatchErrorMeta.vat_number` is **deprecated** — use `item.error.vat_number`. It remains populated (falling back to `error.vat_number` if the API omits it) and will be removed in a future major version
+- All exception constructors keep their existing positional parameter order; the new parameters are trailing optionals
+- Tests added for field-present, field-absent (older server) and batch fallback behaviour
+
 ## 0.4.0
 
 Rebrand from **Vatly** to **Avatcado**. This is a **breaking change** — there are no backward-compatible aliases.

@@ -173,6 +173,29 @@ class TestAsyncValidateErrors:
         client.close()
 
     @respx.mock(base_url=BASE_URL)
+    def test_tier_insufficient_echoes_request_context(self, respx_mock: respx.MockRouter) -> None:
+        respx_mock.post("/v1/validate/async").mock(
+            return_value=httpx.Response(
+                403,
+                json={
+                    "error": {
+                        "code": "tier_insufficient",
+                        "message": "Async validation requires a Pro or Business plan",
+                        "vat_number": "DE123456789",
+                        "requester_vat_number": "NL861234567B01",
+                    },
+                    "meta": {"request_id": "req_tier_ctx"},
+                },
+            )
+        )
+        client = Avatcado(MOCK_API_KEY)
+        with pytest.raises(AuthenticationError) as exc_info:
+            client.async_vat.validate("DE123456789")
+        assert exc_info.value.vat_number == "DE123456789"
+        assert exc_info.value.requester_vat_number == "NL861234567B01"
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
     def test_webhook_not_configured(self, respx_mock: respx.MockRouter) -> None:
         respx_mock.post("/v1/validate/async").mock(
             return_value=httpx.Response(
