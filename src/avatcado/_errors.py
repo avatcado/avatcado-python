@@ -165,6 +165,9 @@ def _raise_for_error(
     details: Optional[List[Dict[str, str]]] = (
         details_raw if isinstance(details_raw, list) else None
     )
+    vat_number: Optional[str] = error_obj.get("vat_number")
+    requester_vat_number: Optional[str] = error_obj.get("requester_vat_number")
+    validation_id: Optional[str] = meta.get("validation_id")
 
     request_id: Optional[str] = meta.get("request_id")
     if request_id is None and hasattr(headers, "get"):
@@ -179,12 +182,57 @@ def _raise_for_error(
             pass
 
     if code in _AUTHENTICATION_CODES:
-        raise AuthenticationError(message, code, status_code, request_id, docs_url)
+        raise AuthenticationError(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+        )
     if code in _VALIDATION_CODES:
-        raise ValidationError(message, code, status_code, request_id, docs_url, details)
+        raise ValidationError(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            details=details,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+        )
     if code in _RATE_LIMIT_CODES:
-        raise RateLimitError(message, code, status_code, request_id, docs_url, retry_after)
+        raise RateLimitError(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            retry_after=retry_after,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+        )
     if code in _UPSTREAM_CODES:
-        raise UpstreamError(message, code, status_code, request_id, docs_url, retry_after)
+        raise UpstreamError(
+            message,
+            code=code,
+            status_code=status_code,
+            request_id=request_id,
+            docs_url=docs_url,
+            retry_after=retry_after,
+            vat_number=vat_number,
+            requester_vat_number=requester_vat_number,
+            validation_id=validation_id,
+        )
 
-    raise AvatcadoError(message, code, status_code, request_id, docs_url, details)
+    raise AvatcadoError(
+        message,
+        code=code,
+        status_code=status_code,
+        request_id=request_id,
+        docs_url=docs_url,
+        details=details,
+        vat_number=vat_number,
+        requester_vat_number=requester_vat_number,
+    )

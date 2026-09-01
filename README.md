@@ -162,7 +162,8 @@ try:
 except RateLimitError as e:
     print(f"Rate limited. Retry after {e.retry_after}s")
 except UpstreamError as e:
-    print(f"Tax authority unavailable. Retry after {e.retry_after}s")
+    print(f"Tax authority unavailable for {e.vat_number}. Retry after {e.retry_after}s")
+    print(f"Failed attempt recorded as {e.validation_id}")
 except AuthenticationError as e:
     print("Invalid API key or insufficient plan")
 except ValidationError as e:
@@ -187,13 +188,19 @@ except AvatcadoError as e:
 ### Error Properties
 
 ```python
-e.message      # Human-readable message
-e.code         # Machine-readable code (e.g. "unauthorized", "rate_limit_exceeded")
-e.status_code  # HTTP status (0 for network/timeout errors)
-e.request_id   # Request ID (string or None)
-e.docs_url     # Link to error documentation (string, empty if not provided)
-e.details      # Validation error details (list of dicts or None)
+e.message               # Human-readable message
+e.code                  # Machine-readable code (e.g. "unauthorized", "rate_limit_exceeded")
+e.status_code           # HTTP status (0 for network/timeout errors)
+e.request_id            # Request ID (string or None)
+e.docs_url              # Link to error documentation (string, empty if not provided)
+e.details               # Validation details: list of {"field": ..., "message": ...} dicts, or None
+e.vat_number            # Normalized VAT number from the failed request (string or None)
+e.requester_vat_number  # Normalized requester VAT number from the request (string or None)
 ```
+
+`vat_number` and `requester_vat_number` are echoed by the API on validation, rate-limit, upstream and server errors from the single-number validation endpoints (`vat.validate()`, `async_vat.validate()`), including `tier_insufficient` and `webhook_not_configured` from the async endpoint. They are `None` when the API rejected the request before reading it (`unauthorized`, `forbidden`, `key_revoked`), on batch-level errors (per-item batch errors carry `item.error.vat_number` instead), when no VAT number was submitted, and on responses from API versions that predate these fields.
+
+`UpstreamError` additionally exposes `e.validation_id` (string or None): the identifier of the recorded failed validation attempt. It is present only for `upstream_unavailable` / `upstream_member_state_unavailable` and never in test mode.
 
 ### Retries
 
