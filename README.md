@@ -74,8 +74,10 @@ for item in result.results:
     if is_batch_success(item):
         print(f"{item.data.vat_number} is {'valid' if item.data.valid else 'invalid'}")
     else:
-        print(f"{item.meta.vat_number} failed: {item.error.message}")
+        print(f"{item.error.vat_number} failed: {item.error.message}")
 ```
+
+> `item.meta.vat_number` is deprecated as of 0.5.0 — use `item.error.vat_number`. It remains populated for backward compatibility.
 
 ### `avatcado.async_vat.validate()`
 
