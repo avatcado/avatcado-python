@@ -11,6 +11,7 @@ from avatcado import (
     Avatcado,
     AvatcadoError,
     BatchResultError,
+    BatchResultSuccess,
     RateLimitError,
     ValidationError,
     is_batch_success,
@@ -45,14 +46,13 @@ class TestBatchValidateSuccess:
                             "vat_number": "NL123456789B01",
                             "country_code": "NL",
                             "company": {"name": "Test BV", "address": "Amsterdam"},
-                            "consultation_number": None,
                             "requested_at": "2026-03-18T12:00:00Z",
                         },
                         "meta": {
-                            "cached": None,
-                            "cached_at": None,
-                            "stale": None,
-                            "source_status": None,
+                            "source": "vies",
+                            "source_status": "live",
+                            "cached": False,
+                            "stale": False,
                         },
                     },
                     {
@@ -67,7 +67,6 @@ class TestBatchValidateSuccess:
             },
             "meta": {
                 "request_id": "req_batch_mixed",
-                "mode": None,
                 "request_duration_ms": 200,
             },
         }
@@ -101,7 +100,6 @@ class TestBatchValidateSuccess:
             },
             "meta": {
                 "request_id": "req_all_fail",
-                "mode": None,
                 "request_duration_ms": 50,
             },
         }
@@ -188,14 +186,13 @@ class TestBatchPerItemMeta:
                             "vat_number": "NL123456789B01",
                             "country_code": "NL",
                             "company": {"name": "Test BV", "address": "Amsterdam"},
-                            "consultation_number": None,
                             "requested_at": "2026-03-18T12:00:00Z",
                         },
                         "meta": {
-                            "cached": None,
-                            "cached_at": None,
-                            "stale": None,
+                            "source": "vies",
                             "source_status": "live",
+                            "cached": False,
+                            "stale": False,
                         },
                     },
                 ],
@@ -203,7 +200,6 @@ class TestBatchPerItemMeta:
             },
             "meta": {
                 "request_id": "req_batch_ss",
-                "mode": None,
                 "request_duration_ms": 100,
             },
         }
@@ -214,8 +210,6 @@ class TestBatchPerItemMeta:
         result = client.vat.validate_batch(["NL123456789B01"])
         item = result.results[0]
         assert is_batch_success(item)
-        from avatcado import BatchResultSuccess
-
         assert isinstance(item, BatchResultSuccess)
         assert item.meta.source_status == "live"
         client.close()
@@ -242,7 +236,6 @@ class TestBatchItemErrorContext:
             },
             "meta": {
                 "request_id": "req_batch_ctx",
-                "mode": None,
                 "request_duration_ms": 50,
             },
         }
@@ -274,7 +267,6 @@ class TestBatchItemErrorContext:
             },
             "meta": {
                 "request_id": "req_batch_old",
-                "mode": None,
                 "request_duration_ms": 50,
             },
         }

@@ -104,12 +104,12 @@ class TestValidateMeta:
             "data": VALID_RESPONSE["data"],
             "meta": {
                 "request_id": "req_cached",
-                "cached": True,
-                "cached_at": "2026-03-18T11:00:00Z",
-                "stale": False,
-                "mode": None,
                 "request_duration_ms": 5,
-                "source_status": None,
+                "source": "vies",
+                "source_status": "cached",
+                "cached": True,
+                "stale": False,
+                "cached_at": "2026-03-18T11:00:00Z",
             },
         }
         respx_mock.get("/v1/validate").mock(
@@ -128,12 +128,12 @@ class TestValidateMeta:
             "data": VALID_RESPONSE["data"],
             "meta": {
                 "request_id": "req_stale",
-                "cached": True,
-                "cached_at": "2026-03-17T11:00:00Z",
-                "stale": True,
-                "mode": None,
                 "request_duration_ms": 2,
+                "source": "vies",
                 "source_status": "unavailable",
+                "cached": True,
+                "stale": True,
+                "cached_at": "2026-02-01T11:00:00Z",
             },
         }
         respx_mock.get("/v1/validate").mock(
@@ -151,12 +151,12 @@ class TestValidateMeta:
             "data": VALID_RESPONSE["data"],
             "meta": {
                 "request_id": "req_test",
-                "mode": "test",
-                "cached": None,
-                "cached_at": None,
-                "stale": None,
                 "request_duration_ms": 10,
-                "source_status": None,
+                "mode": "test",
+                "source": "test",
+                "source_status": "live",
+                "cached": False,
+                "stale": False,
             },
         }
         respx_mock.get("/v1/validate").mock(
@@ -185,7 +185,13 @@ class TestValidateMeta:
     def test_source_status_degraded(self, respx_mock: respx.MockRouter) -> None:
         resp = {
             "data": VALID_RESPONSE["data"],
-            "meta": {**VALID_RESPONSE["meta"], "source_status": "degraded"},
+            "meta": {
+                **VALID_RESPONSE["meta"],
+                "source_status": "degraded",
+                "cached": True,
+                "stale": False,
+                "cached_at": "2026-03-10T09:00:00Z",
+            },
         }
         respx_mock.get("/v1/validate").mock(
             return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
