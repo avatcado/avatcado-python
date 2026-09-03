@@ -185,9 +185,11 @@ class BatchResultSuccess:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> BatchResultSuccess:
+        meta_raw = data.get("meta")
+        meta_data: Dict[str, Any] = meta_raw if isinstance(meta_raw, dict) else {}
         return cls(
-            data=VatValidationResult.from_dict(data["data"]),
-            meta=BatchItemMeta.from_dict(data["meta"]),
+            data=VatValidationResult.from_dict(_require_key(data, "data", "BatchResultSuccess")),
+            meta=BatchItemMeta.from_dict(meta_data),
         )
 
 

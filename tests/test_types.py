@@ -153,6 +153,36 @@ class TestBatchTypes:
         assert item.meta.source == "vies"
         assert item.meta.source_status == "cached"
 
+    def test_batch_result_success_missing_meta_tolerated(self) -> None:
+        item = BatchResultSuccess.from_dict(
+            {
+                "data": {
+                    "valid": True,
+                    "vat_number": "NL123456789B01",
+                    "country_code": "NL",
+                    "company": None,
+                    "requested_at": "2026-03-18T12:00:00Z",
+                }
+            }
+        )
+        assert item.data.valid is True
+        assert item.meta == BatchItemMeta()
+
+    def test_batch_result_success_non_dict_meta_tolerated(self) -> None:
+        item = BatchResultSuccess.from_dict(
+            {
+                "data": {
+                    "valid": True,
+                    "vat_number": "NL123456789B01",
+                    "country_code": "NL",
+                    "company": None,
+                    "requested_at": "2026-03-18T12:00:00Z",
+                },
+                "meta": None,
+            }
+        )
+        assert item.meta == BatchItemMeta()
+
     def test_batch_result_error_from_dict(self) -> None:
         item = BatchResultError.from_dict(
             {
@@ -316,6 +346,12 @@ class TestFromDictMissingRequiredField:
             ResponseMeta.from_dict({})
         assert exc_info.value.code == "parse_error"
         assert "request_id" in exc_info.value.message
+
+    def test_batch_result_success_missing_data(self) -> None:
+        with pytest.raises(AvatcadoError) as exc_info:
+            BatchResultSuccess.from_dict({"meta": {}})
+        assert exc_info.value.code == "parse_error"
+        assert "data" in exc_info.value.message
 
     def test_batch_summary_missing_total(self) -> None:
         with pytest.raises(AvatcadoError) as exc_info:
