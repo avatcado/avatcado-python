@@ -124,10 +124,21 @@ class ValidateResponse:
 
 @dataclass
 class BatchItemMeta:
-    cached: Optional[bool]
-    cached_at: Optional[str]
-    stale: Optional[bool]
-    source_status: Optional[SourceStatus]
+    """Per-item metadata for a successful batch entry.
+
+    The current API always sends ``source``, ``source_status``, ``cached`` and ``stale`` on
+    each successful item, and ``cached_at`` exactly when ``cached`` is true. Items never carry
+    ``request_id`` or ``mode``; those live on the batch envelope. All fields default to
+    ``None`` so an empty ``meta`` (older API versions, or ``batch.completed`` webhook rows
+    recorded before the field existed) still parses. See :class:`ResponseMeta` for the
+    meaning of ``source``; it is declared last to keep the earlier positional order.
+    """
+
+    cached: Optional[bool] = None
+    cached_at: Optional[str] = None
+    stale: Optional[bool] = None
+    source_status: Optional[SourceStatus] = None
+    source: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> BatchItemMeta:
@@ -136,6 +147,7 @@ class BatchItemMeta:
             cached_at=data.get("cached_at"),
             stale=data.get("stale"),
             source_status=data.get("source_status"),
+            source=data.get("source"),
         )
 
 

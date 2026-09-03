@@ -140,16 +140,18 @@ class TestBatchTypes:
                     "requested_at": "2026-03-18T12:00:00Z",
                 },
                 "meta": {
+                    "source": "vies",
+                    "source_status": "cached",
                     "cached": True,
-                    "cached_at": "2026-03-18T11:00:00Z",
                     "stale": False,
-                    "source_status": "live",
+                    "cached_at": "2026-03-18T11:00:00Z",
                 },
             }
         )
         assert item.data.valid is True
         assert item.meta.cached is True
-        assert item.meta.source_status == "live"
+        assert item.meta.source == "vies"
+        assert item.meta.source_status == "cached"
 
     def test_batch_result_error_from_dict(self) -> None:
         item = BatchResultError.from_dict(
@@ -217,6 +219,38 @@ class TestBatchTypes:
     def test_batch_error_detail_constructible_without_vat_number(self) -> None:
         detail = BatchErrorDetail(code="invalid_vat_format", message="Invalid")
         assert detail.vat_number is None
+
+
+class TestBatchItemMeta:
+    def test_from_dict_empty_meta_all_none(self) -> None:
+        # batch.completed webhooks can carry {} for rows stored before the meta change.
+        m = BatchItemMeta.from_dict({})
+        assert m.source is None
+        assert m.source_status is None
+        assert m.cached is None
+        assert m.stale is None
+        assert m.cached_at is None
+
+    def test_no_arg_construction(self) -> None:
+        assert BatchItemMeta() == BatchItemMeta.from_dict({})
+
+    def test_positional_four_args_still_work(self) -> None:
+        m = BatchItemMeta(True, "2026-03-18T11:00:00Z", False, "cached")
+        assert m.cached is True
+        assert m.cached_at == "2026-03-18T11:00:00Z"
+        assert m.stale is False
+        assert m.source_status == "cached"
+        assert m.source is None
+
+    def test_from_dict_fallback_item(self) -> None:
+        m = BatchItemMeta.from_dict(
+            {"source": "anaf", "source_status": "fallback", "cached": False, "stale": False}
+        )
+        assert m.source == "anaf"
+        assert m.source_status == "fallback"
+        assert m.cached is False
+        assert m.stale is False
+        assert m.cached_at is None
 
 
 class TestIsBatchSuccess:
