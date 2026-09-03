@@ -120,6 +120,7 @@ class TestValidateMeta:
         assert result.meta.cached is True
         assert result.meta.cached_at == "2026-03-18T11:00:00Z"
         assert result.meta.stale is False
+        assert result.meta.source_status == "cached"
         client.close()
 
     @respx.mock(base_url=BASE_URL)

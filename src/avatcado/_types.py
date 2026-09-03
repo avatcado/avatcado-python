@@ -56,7 +56,9 @@ class VatValidationResult:
         )
 
 
-SourceStatus = Literal["live", "unavailable", "degraded"]
+# How a served validation result was obtained. Widened in 0.6.0: the narrower alias made
+# ``meta.source_status == "fallback"`` a non-overlapping comparison under mypy --strict.
+SourceStatus = Literal["live", "cached", "unavailable", "degraded", "fallback"]
 
 
 @dataclass

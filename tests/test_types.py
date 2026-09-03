@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import get_args
+
 import pytest
 
 from avatcado import (
@@ -12,6 +14,7 @@ from avatcado import (
     BatchSummary,
     Company,
     ResponseMeta,
+    SourceStatus,
     VatRate,
     VatValidationResult,
     is_batch_success,
@@ -62,7 +65,24 @@ class TestVatValidationResult:
         assert r.consultation_number is None
 
 
+class TestSourceStatus:
+    def test_literal_has_five_values(self) -> None:
+        assert get_args(SourceStatus) == ("live", "cached", "unavailable", "degraded", "fallback")
+
+    def test_new_values_are_assignable(self) -> None:
+        # Type-checked when mypy runs over tests; a narrower Literal rejects these.
+        cached: SourceStatus = "cached"
+        fallback: SourceStatus = "fallback"
+        assert cached == "cached"
+        assert fallback == "fallback"
+
+
 class TestResponseMeta:
+    @pytest.mark.parametrize("status", ["cached", "fallback"])
+    def test_from_dict_accepts_new_source_statuses(self, status: str) -> None:
+        m = ResponseMeta.from_dict({"request_id": "req_1", "source_status": status})
+        assert m.source_status == status
+
     def test_from_dict_full(self) -> None:
         m = ResponseMeta.from_dict(
             {
