@@ -11,6 +11,7 @@ from avatcado import (
     Avatcado,
     AvatcadoError,
     BatchResultError,
+    BatchResultSuccess,
     RateLimitError,
     ValidationError,
     is_batch_success,
@@ -45,14 +46,13 @@ class TestBatchValidateSuccess:
                             "vat_number": "NL123456789B01",
                             "country_code": "NL",
                             "company": {"name": "Test BV", "address": "Amsterdam"},
-                            "consultation_number": None,
                             "requested_at": "2026-03-18T12:00:00Z",
                         },
                         "meta": {
-                            "cached": None,
-                            "cached_at": None,
-                            "stale": None,
-                            "source_status": None,
+                            "source": "vies",
+                            "source_status": "live",
+                            "cached": False,
+                            "stale": False,
                         },
                     },
                     {
@@ -67,7 +67,6 @@ class TestBatchValidateSuccess:
             },
             "meta": {
                 "request_id": "req_batch_mixed",
-                "mode": None,
                 "request_duration_ms": 200,
             },
         }
@@ -101,7 +100,6 @@ class TestBatchValidateSuccess:
             },
             "meta": {
                 "request_id": "req_all_fail",
-                "mode": None,
                 "request_duration_ms": 50,
             },
         }
@@ -188,14 +186,13 @@ class TestBatchPerItemMeta:
                             "vat_number": "NL123456789B01",
                             "country_code": "NL",
                             "company": {"name": "Test BV", "address": "Amsterdam"},
-                            "consultation_number": None,
                             "requested_at": "2026-03-18T12:00:00Z",
                         },
                         "meta": {
-                            "cached": None,
-                            "cached_at": None,
-                            "stale": None,
+                            "source": "vies",
                             "source_status": "live",
+                            "cached": False,
+                            "stale": False,
                         },
                     },
                 ],
@@ -203,7 +200,6 @@ class TestBatchPerItemMeta:
             },
             "meta": {
                 "request_id": "req_batch_ss",
-                "mode": None,
                 "request_duration_ms": 100,
             },
         }
@@ -214,10 +210,121 @@ class TestBatchPerItemMeta:
         result = client.vat.validate_batch(["NL123456789B01"])
         item = result.results[0]
         assert is_batch_success(item)
-        from avatcado import BatchResultSuccess
-
         assert isinstance(item, BatchResultSuccess)
+        assert item.meta.source == "vies"
         assert item.meta.source_status == "live"
+        assert item.meta.cached is False
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_mixed_source_statuses_in_batch(self, respx_mock: respx.MockRouter) -> None:
+        def success(vat: str, cc: str, meta: dict[str, object]) -> dict[str, object]:
+            return {
+                "data": {
+                    "valid": True,
+                    "vat_number": vat,
+                    "country_code": cc,
+                    "company": {"name": "Test", "address": None},
+                    "requested_at": "2026-03-18T12:00:00Z",
+                },
+                "meta": meta,
+            }
+
+        resp = {
+            "data": {
+                "results": [
+                    success(
+                        "NL123456789B01",
+                        "NL",
+                        {
+                            "source": "vies",
+                            "source_status": "live",
+                            "cached": False,
+                            "stale": False,
+                        },
+                    ),
+                    success(
+                        "DE987654321",
+                        "DE",
+                        {
+                            "source": "vies",
+                            "source_status": "cached",
+                            "cached": True,
+                            "stale": False,
+                            "cached_at": "2026-03-18T11:00:00Z",
+                        },
+                    ),
+                    success(
+                        "RO555555555",
+                        "RO",
+                        {
+                            "source": "anaf",
+                            "source_status": "fallback",
+                            "cached": False,
+                            "stale": False,
+                        },
+                    ),
+                ],
+                "summary": {"total": 3, "succeeded": 3, "failed": 0},
+            },
+            "meta": {"request_id": "req_batch_mixed_src", "request_duration_ms": 900},
+        }
+        respx_mock.post("/v1/validate/batch").mock(
+            return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
+        )
+        client = Avatcado(MOCK_API_KEY)
+        result = client.vat.validate_batch(["NL123456789B01", "DE987654321", "RO555555555"])
+        live, cached, fallback = result.results
+        assert isinstance(live, BatchResultSuccess)
+        assert isinstance(cached, BatchResultSuccess)
+        assert isinstance(fallback, BatchResultSuccess)
+        assert (live.meta.source, live.meta.source_status) == ("vies", "live")
+        assert (cached.meta.source, cached.meta.source_status) == ("vies", "cached")
+        assert cached.meta.cached_at == "2026-03-18T11:00:00Z"
+        assert (fallback.meta.source, fallback.meta.source_status) == ("anaf", "fallback")
+        assert fallback.data.consultation_number is None
+        # The batch envelope never carries the per-item source fields.
+        assert result.meta.source is None
+        assert result.meta.source_status is None
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_batch_item_meta_from_older_server(self, respx_mock: respx.MockRouter) -> None:
+        resp = {
+            "data": {
+                "results": [
+                    {
+                        "data": {
+                            "valid": True,
+                            "vat_number": "NL123456789B01",
+                            "country_code": "NL",
+                            "company": {"name": "Test BV", "address": "Amsterdam"},
+                            "consultation_number": None,
+                            "requested_at": "2026-03-18T12:00:00Z",
+                        },
+                        "meta": {
+                            "cached": None,
+                            "cached_at": None,
+                            "stale": None,
+                            "source_status": None,
+                        },
+                    },
+                ],
+                "summary": {"total": 1, "succeeded": 1, "failed": 0},
+            },
+            "meta": {"request_id": "req_batch_old_meta", "request_duration_ms": 100},
+        }
+        respx_mock.post("/v1/validate/batch").mock(
+            return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
+        )
+        client = Avatcado(MOCK_API_KEY)
+        result = client.vat.validate_batch(["NL123456789B01"])
+        item = result.results[0]
+        assert isinstance(item, BatchResultSuccess)
+        assert item.meta.source is None
+        assert item.meta.source_status is None
+        assert item.meta.cached is None
+        assert item.meta.stale is None
         client.close()
 
 
@@ -242,7 +349,6 @@ class TestBatchItemErrorContext:
             },
             "meta": {
                 "request_id": "req_batch_ctx",
-                "mode": None,
                 "request_duration_ms": 50,
             },
         }
@@ -274,7 +380,6 @@ class TestBatchItemErrorContext:
             },
             "meta": {
                 "request_id": "req_batch_old",
-                "mode": None,
                 "request_duration_ms": 50,
             },
         }

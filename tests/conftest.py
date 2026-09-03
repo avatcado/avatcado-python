@@ -1,25 +1,45 @@
 from __future__ import annotations
 
+from typing import Any, Dict
+
 MOCK_API_KEY = "avat_live_test123"
 BASE_URL = "https://api.avatcado.com"
 
-VALID_RESPONSE = {
+VALID_RESPONSE: Dict[str, Any] = {
     "data": {
         "valid": True,
         "vat_number": "NL123456789B01",
         "country_code": "NL",
         "company": {"name": "Test BV", "address": "Amsterdam, Netherlands"},
-        "consultation_number": None,
         "requested_at": "2026-03-18T12:00:00Z",
     },
     "meta": {
         "request_id": "req_abc123",
-        "cached": None,
-        "cached_at": None,
-        "stale": None,
-        "mode": None,
         "request_duration_ms": 150,
-        "source_status": None,
+        "source": "vies",
+        "source_status": "live",
+        "cached": False,
+        "stale": False,
+    },
+}
+
+# National registry fallback: VIES was down for RO, ANAF answered. Fallback responses never
+# carry a consultation_number and are never served from cache.
+FALLBACK_RESPONSE: Dict[str, Any] = {
+    "data": {
+        "valid": True,
+        "vat_number": "RO555555555",
+        "country_code": "RO",
+        "company": {"name": "Test SRL", "address": "Bucharest, Romania"},
+        "requested_at": "2026-03-18T12:00:00Z",
+    },
+    "meta": {
+        "request_id": "req_fallback",
+        "request_duration_ms": 420,
+        "source": "anaf",
+        "source_status": "fallback",
+        "cached": False,
+        "stale": False,
     },
 }
 
@@ -29,7 +49,7 @@ RATE_LIMIT_HEADERS = {
     "x-ratelimit-reset": "2026-04-01T00:00:00Z",
 }
 
-BATCH_RESPONSE = {
+BATCH_RESPONSE: Dict[str, Any] = {
     "data": {
         "results": [
             {
@@ -38,14 +58,13 @@ BATCH_RESPONSE = {
                     "vat_number": "NL123456789B01",
                     "country_code": "NL",
                     "company": {"name": "Test BV", "address": "Amsterdam"},
-                    "consultation_number": None,
                     "requested_at": "2026-03-18T12:00:00Z",
                 },
                 "meta": {
-                    "cached": None,
-                    "cached_at": None,
-                    "stale": None,
-                    "source_status": None,
+                    "source": "vies",
+                    "source_status": "live",
+                    "cached": False,
+                    "stale": False,
                 },
             },
             {
@@ -54,14 +73,13 @@ BATCH_RESPONSE = {
                     "vat_number": "DE987654321",
                     "country_code": "DE",
                     "company": {"name": "Test GmbH", "address": "Berlin"},
-                    "consultation_number": None,
                     "requested_at": "2026-03-18T12:00:01Z",
                 },
                 "meta": {
-                    "cached": None,
-                    "cached_at": None,
-                    "stale": None,
-                    "source_status": None,
+                    "source": "vies",
+                    "source_status": "live",
+                    "cached": False,
+                    "stale": False,
                 },
             },
         ],
@@ -69,12 +87,11 @@ BATCH_RESPONSE = {
     },
     "meta": {
         "request_id": "req_batch1",
-        "mode": None,
         "request_duration_ms": 300,
     },
 }
 
-LIST_RATES_RESPONSE = {
+LIST_RATES_RESPONSE: Dict[str, Any] = {
     "data": [
         {
             "country_code": "NL",
@@ -96,7 +113,7 @@ LIST_RATES_RESPONSE = {
     "meta": {"request_id": "req_rates1", "count": 2},
 }
 
-GET_RATE_RESPONSE = {
+GET_RATE_RESPONSE: Dict[str, Any] = {
     "data": {
         "country_code": "NL",
         "country_name": "Netherlands",
@@ -108,7 +125,7 @@ GET_RATE_RESPONSE = {
     "meta": {"request_id": "req_rate_nl"},
 }
 
-ASYNC_SINGLE_RESPONSE = {
+ASYNC_SINGLE_RESPONSE: Dict[str, Any] = {
     "data": {
         "request_id": "550e8400-e29b-41d4-a716-446655440000",
         "status": "pending",
@@ -119,7 +136,7 @@ ASYNC_SINGLE_RESPONSE = {
     },
 }
 
-ASYNC_BATCH_RESPONSE = {
+ASYNC_BATCH_RESPONSE: Dict[str, Any] = {
     "data": {
         "batch_id": "660e8400-e29b-41d4-a716-446655440000",
         "status": "pending",

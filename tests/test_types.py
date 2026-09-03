@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import get_args
+
 import pytest
 
 from avatcado import (
@@ -12,6 +14,7 @@ from avatcado import (
     BatchSummary,
     Company,
     ResponseMeta,
+    SourceStatus,
     VatRate,
     VatValidationResult,
     is_batch_success,
@@ -62,7 +65,24 @@ class TestVatValidationResult:
         assert r.consultation_number is None
 
 
+class TestSourceStatus:
+    def test_literal_has_five_values(self) -> None:
+        assert get_args(SourceStatus) == ("live", "cached", "unavailable", "degraded", "fallback")
+
+    def test_new_values_are_assignable(self) -> None:
+        # Type-checked when mypy runs over tests; a narrower Literal rejects these.
+        cached: SourceStatus = "cached"
+        fallback: SourceStatus = "fallback"
+        assert cached == "cached"
+        assert fallback == "fallback"
+
+
 class TestResponseMeta:
+    @pytest.mark.parametrize("status", ["cached", "fallback"])
+    def test_from_dict_accepts_new_source_statuses(self, status: str) -> None:
+        m = ResponseMeta.from_dict({"request_id": "req_1", "source_status": status})
+        assert m.source_status == status
+
     def test_from_dict_full(self) -> None:
         m = ResponseMeta.from_dict(
             {
@@ -70,6 +90,7 @@ class TestResponseMeta:
                 "cached": True,
                 "cached_at": "2026-03-18T11:00:00Z",
                 "stale": False,
+                "source": "vies",
                 "source_status": "live",
                 "mode": "test",
                 "request_duration_ms": 150,
@@ -78,6 +99,7 @@ class TestResponseMeta:
         assert m.request_id == "req_123"
         assert m.cached is True
         assert m.stale is False
+        assert m.source == "vies"
         assert m.source_status == "live"
         assert m.mode == "test"
 
@@ -85,7 +107,20 @@ class TestResponseMeta:
         m = ResponseMeta.from_dict({"request_id": "req_456"})
         assert m.request_id == "req_456"
         assert m.cached is None
+        assert m.source is None
         assert m.source_status is None
+
+    def test_from_dict_null_source_tolerated(self) -> None:
+        m = ResponseMeta.from_dict({"request_id": "req_456", "source": None})
+        assert m.source is None
+
+    def test_positional_construction_unchanged(self) -> None:
+        # The eight pre-0.6 positional parameters keep their order; source is appended.
+        m = ResponseMeta("req_1", True, "2026-03-18T11:00:00Z", False, "cached", None, 5, None)
+        assert m.request_id == "req_1"
+        assert m.count is None
+        assert m.source is None
+        assert ResponseMeta("req_1", source="anaf").source == "anaf"
 
     def test_from_dict_with_count(self) -> None:
         m = ResponseMeta.from_dict({"request_id": "req_789", "count": 27})
@@ -105,16 +140,48 @@ class TestBatchTypes:
                     "requested_at": "2026-03-18T12:00:00Z",
                 },
                 "meta": {
+                    "source": "vies",
+                    "source_status": "cached",
                     "cached": True,
-                    "cached_at": "2026-03-18T11:00:00Z",
                     "stale": False,
-                    "source_status": "live",
+                    "cached_at": "2026-03-18T11:00:00Z",
                 },
             }
         )
         assert item.data.valid is True
         assert item.meta.cached is True
-        assert item.meta.source_status == "live"
+        assert item.meta.source == "vies"
+        assert item.meta.source_status == "cached"
+
+    def test_batch_result_success_missing_meta_tolerated(self) -> None:
+        item = BatchResultSuccess.from_dict(
+            {
+                "data": {
+                    "valid": True,
+                    "vat_number": "NL123456789B01",
+                    "country_code": "NL",
+                    "company": None,
+                    "requested_at": "2026-03-18T12:00:00Z",
+                }
+            }
+        )
+        assert item.data.valid is True
+        assert item.meta == BatchItemMeta()
+
+    def test_batch_result_success_non_dict_meta_tolerated(self) -> None:
+        item = BatchResultSuccess.from_dict(
+            {
+                "data": {
+                    "valid": True,
+                    "vat_number": "NL123456789B01",
+                    "country_code": "NL",
+                    "company": None,
+                    "requested_at": "2026-03-18T12:00:00Z",
+                },
+                "meta": None,
+            }
+        )
+        assert item.meta == BatchItemMeta()
 
     def test_batch_result_error_from_dict(self) -> None:
         item = BatchResultError.from_dict(
@@ -184,6 +251,38 @@ class TestBatchTypes:
         assert detail.vat_number is None
 
 
+class TestBatchItemMeta:
+    def test_from_dict_empty_meta_all_none(self) -> None:
+        # batch.completed webhooks can carry {} for rows stored before the meta change.
+        m = BatchItemMeta.from_dict({})
+        assert m.source is None
+        assert m.source_status is None
+        assert m.cached is None
+        assert m.stale is None
+        assert m.cached_at is None
+
+    def test_no_arg_construction(self) -> None:
+        assert BatchItemMeta() == BatchItemMeta.from_dict({})
+
+    def test_positional_four_args_still_work(self) -> None:
+        m = BatchItemMeta(True, "2026-03-18T11:00:00Z", False, "cached")
+        assert m.cached is True
+        assert m.cached_at == "2026-03-18T11:00:00Z"
+        assert m.stale is False
+        assert m.source_status == "cached"
+        assert m.source is None
+
+    def test_from_dict_fallback_item(self) -> None:
+        m = BatchItemMeta.from_dict(
+            {"source": "anaf", "source_status": "fallback", "cached": False, "stale": False}
+        )
+        assert m.source == "anaf"
+        assert m.source_status == "fallback"
+        assert m.cached is False
+        assert m.stale is False
+        assert m.cached_at is None
+
+
 class TestIsBatchSuccess:
     def test_returns_true_for_success(self) -> None:
         item = BatchResultSuccess(
@@ -247,6 +346,12 @@ class TestFromDictMissingRequiredField:
             ResponseMeta.from_dict({})
         assert exc_info.value.code == "parse_error"
         assert "request_id" in exc_info.value.message
+
+    def test_batch_result_success_missing_data(self) -> None:
+        with pytest.raises(AvatcadoError) as exc_info:
+            BatchResultSuccess.from_dict({"meta": {}})
+        assert exc_info.value.code == "parse_error"
+        assert "data" in exc_info.value.message
 
     def test_batch_summary_missing_total(self) -> None:
         with pytest.raises(AvatcadoError) as exc_info:

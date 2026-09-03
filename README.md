@@ -31,7 +31,7 @@ Validate a single VAT number.
 result = avatcado.vat.validate(
     "NL123456789B01",
     requester_vat_number="DE987654321",  # optional, for consultation number
-    cache=False,                          # optional, bypass 30-day cache
+    cache=False,                          # optional, bypass 25-day cache
     request_id="my-trace-id",            # optional, for request tracing
 )
 
@@ -40,17 +40,34 @@ print(result.data.vat_number)         # "NL123456789B01"
 print(result.data.country_code)       # "NL"
 print(result.data.company.name)       # "Example BV"
 print(result.data.company.address)    # "Amsterdam, Netherlands" or None
-print(result.data.consultation_number)  # None or string (EU/UK only)
+print(result.data.consultation_number)  # None or string (EU/UK only; never on fallback)
 print(result.data.requested_at)       # "2026-03-18T12:00:00Z"
 
 print(result.meta.request_id)         # "req_abc123"
-print(result.meta.cached)             # True/False/None
-print(result.meta.stale)              # True/False/None
-print(result.meta.source_status)      # "live", "unavailable", "degraded", or None
+print(result.meta.source)             # "vies", "hmrc", ... or e.g. "anaf" on fallback
+print(result.meta.source_status)      # "live", "cached", "unavailable", "degraded", "fallback"
+print(result.meta.cached)             # True/False (None on older API versions)
+print(result.meta.stale)              # True/False (None on older API versions)
+print(result.meta.cached_at)          # ISO timestamp when cached, else None
 
 print(result.rate_limit.remaining)    # 99
 print(result.rate_limit.burst_limit)  # int or None
 ```
+
+#### Source and fallback
+
+`meta.source` names the registry that produced the served data: `vies`, `hmrc`, `bfs`, `brreg`, `abr`, or `test` in test mode. When VIES is down for a member state, the API consults that country's national register before falling back to stale cache; `source` then names the register (`anaf`, `ares`, `dgfip`, `kas`, `prh`, `vid`, `vmi`) and `source_status` is `"fallback"`. `source` is a plain string, not an enum.
+
+| Scenario | `source_status` | `cached` | `stale` | `cached_at` |
+|---|---|---|---|---|
+| Fresh upstream result | `"live"` | `False` | `False` | `None` |
+| Cache hit (within 25-day TTL) | `"cached"` | `True` | `False` | set |
+| Upstream down, cached row within TTL served | `"unavailable"` | `True` | `False` | set |
+| Upstream down, row beyond TTL served | `"unavailable"` | `True` | `True` | set |
+| VIES returned a suspected false negative, prior row served | `"degraded"` | `True` | varies | set |
+| VIES down, national register answered | `"fallback"` | `False` | `False` | `None` |
+
+Fallback responses never carry a `consultation_number` (national registers cannot issue one, even with `requester_vat_number`), and `valid` there means the number is registered for domestic VAT; for Poland an active (`Czynny`) taxpayer is valid even without VAT-UE registration. Lithuania (`vmi`) and Latvia (`vid`) return the company name only, so `company.address` is `None`. Fallback and stale responses count toward your quota because data was served; only `503` upstream errors are refunded. API versions that predate these fields omit them, in which case they are `None`.
 
 ### `avatcado.vat.validate_batch()`
 
@@ -222,6 +239,10 @@ print(result.meta.mode)  # "test"
 |-----------------|--------|
 | `NL123456789B01` | Valid, with company info |
 | `XX000000000` | Invalid format error |
+| `DE555555555` | Valid, served from stale cache: `source_status` `"unavailable"`, `stale` `True` |
+| `RO555555555` | Valid via national registry fallback: `source` `"anaf"`, `source_status` `"fallback"`, no consultation number |
+
+See the [test mode docs](https://docs.avatcado.com/test-mode) for the full list of magic numbers.
 
 ## Configuration
 
@@ -263,6 +284,8 @@ from avatcado import (
     Company,
     VatValidationResult,
     ResponseMeta,
+    BatchItemMeta,
+    SourceStatus,
     RateLimitInfo,
     VatRate,
     OtherRate,

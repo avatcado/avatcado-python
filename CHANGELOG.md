@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0
+
+Meta now reports which registry answered and distinguishes cache hits from national-registry fallback. Additive — no breaking changes.
+
+- `SourceStatus` is widened from `live | unavailable | degraded` to `live | cached | unavailable | degraded | fallback`. `"cached"` marks a plain cache hit (previously reported with `source_status` omitted); `"fallback"` means VIES was down for that member state and the national register answered. The old alias made `meta.source_status == "fallback"` a non-overlapping comparison under mypy `--strict`
+- `ResponseMeta` and `BatchItemMeta` gain `source`: the registry that produced the served data (`vies`, `hmrc`, `bfs`, `brreg`, `abr`, `test`, or a national registry id such as `anaf`, `ares`, `dgfip`, `kas`, `prh`, `vid`, `vmi` on fallback). It is a plain `Optional[str]`, not an enum, and `None` on responses from older API versions
+- On current API responses `cached` and `stale` are always explicit booleans on `vat.validate()` results and batch success items, and `cached_at` is present exactly when `cached` is true. The batch envelope, rates and async responses never carry the source fields
+- Fallback responses never carry a `consultation_number`, and `valid` there means domestic VAT registration; see the README "Source and fallback" section
+- `BatchItemMeta` fields now all default to `None`, so `BatchItemMeta()` and `BatchItemMeta.from_dict({})` work (the shape `batch.completed` webhooks emit for rows recorded before the change)
+- `BatchResultSuccess.from_dict` raises `AvatcadoError(code="parse_error")` instead of a bare `KeyError` when `data` is missing, and tolerates a missing or non-dict `meta`
+- Positional parameter order is preserved: `source` is appended after the existing fields on both classes (it also appears in `repr()` / `dataclasses.asdict()` output)
+- Test fixtures now mirror the real wire shape (optional fields omitted rather than `null`); explicit compatibility tests cover older-server responses
+
 ## 0.5.0
 
 Error responses now echo the submitted VAT request context. Additive — no breaking changes.

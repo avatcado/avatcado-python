@@ -56,11 +56,30 @@ class VatValidationResult:
         )
 
 
-SourceStatus = Literal["live", "unavailable", "degraded"]
+# How a served validation result was obtained. Widened in 0.6.0: the narrower alias made
+# ``meta.source_status == "fallback"`` a non-overlapping comparison under mypy --strict.
+SourceStatus = Literal["live", "cached", "unavailable", "degraded", "fallback"]
 
 
 @dataclass
 class ResponseMeta:
+    """Top-level ``meta`` of a successful response.
+
+    Only ``request_id`` is guaranteed on every response. On a 200 from ``vat.validate()``
+    the current API always sends ``source``, ``source_status``, ``cached`` and ``stale``;
+    ``cached_at`` is present exactly when ``cached`` is true. ``mode`` is ``"test"`` with a
+    test API key, ``request_duration_ms`` accompanies validate/batch responses and ``count``
+    only ``rates.list()``. The batch envelope and the rates endpoints never carry the source
+    fields (per-item batch metadata lives on :class:`BatchItemMeta`). Every field except
+    ``request_id`` is ``None`` when the server omits it, e.g. on older API versions.
+
+    ``source`` names the registry that produced the served data: ``vies``, ``hmrc``, ``bfs``,
+    ``brreg``, ``abr``, a national registry (``dgfip``, ``prh``, ``kas``, ``anaf``, ``ares``,
+    ``vid``, ``vmi``) when ``source_status`` is ``"fallback"``, or ``test`` in test mode. It is
+    a free-form string rather than an enum. It is declared last to keep the positional
+    parameter order of earlier releases.
+    """
+
     request_id: str
     cached: Optional[bool] = None
     cached_at: Optional[str] = None
@@ -69,6 +88,7 @@ class ResponseMeta:
     mode: Optional[Literal["test"]] = None
     request_duration_ms: Optional[int] = None
     count: Optional[int] = None
+    source: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ResponseMeta:
@@ -81,6 +101,7 @@ class ResponseMeta:
             mode=data.get("mode"),
             request_duration_ms=data.get("request_duration_ms"),
             count=data.get("count"),
+            source=data.get("source"),
         )
 
 
@@ -103,10 +124,21 @@ class ValidateResponse:
 
 @dataclass
 class BatchItemMeta:
-    cached: Optional[bool]
-    cached_at: Optional[str]
-    stale: Optional[bool]
-    source_status: Optional[SourceStatus]
+    """Per-item metadata for a successful batch entry.
+
+    The current API always sends ``source``, ``source_status``, ``cached`` and ``stale`` on
+    each successful item, and ``cached_at`` exactly when ``cached`` is true. Items never carry
+    ``request_id`` or ``mode``; those live on the batch envelope. All fields default to
+    ``None`` so an empty ``meta`` (older API versions, or ``batch.completed`` webhook rows
+    recorded before the field existed) still parses. See :class:`ResponseMeta` for the
+    meaning of ``source``; it is declared last to keep the earlier positional order.
+    """
+
+    cached: Optional[bool] = None
+    cached_at: Optional[str] = None
+    stale: Optional[bool] = None
+    source_status: Optional[SourceStatus] = None
+    source: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> BatchItemMeta:
@@ -115,6 +147,7 @@ class BatchItemMeta:
             cached_at=data.get("cached_at"),
             stale=data.get("stale"),
             source_status=data.get("source_status"),
+            source=data.get("source"),
         )
 
 
@@ -152,9 +185,11 @@ class BatchResultSuccess:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> BatchResultSuccess:
+        meta_raw = data.get("meta")
+        meta_data: Dict[str, Any] = meta_raw if isinstance(meta_raw, dict) else {}
         return cls(
-            data=VatValidationResult.from_dict(data["data"]),
-            meta=BatchItemMeta.from_dict(data["meta"]),
+            data=VatValidationResult.from_dict(_require_key(data, "data", "BatchResultSuccess")),
+            meta=BatchItemMeta.from_dict(meta_data),
         )
 
 
