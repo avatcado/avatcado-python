@@ -23,6 +23,26 @@ VALID_RESPONSE: Dict[str, Any] = {
     },
 }
 
+# National registry fallback: VIES was down for RO, ANAF answered. Fallback responses never
+# carry a consultation_number and are never served from cache.
+FALLBACK_RESPONSE: Dict[str, Any] = {
+    "data": {
+        "valid": True,
+        "vat_number": "RO555555555",
+        "country_code": "RO",
+        "company": {"name": "Test SRL", "address": "Bucharest, Romania"},
+        "requested_at": "2026-03-18T12:00:00Z",
+    },
+    "meta": {
+        "request_id": "req_fallback",
+        "request_duration_ms": 420,
+        "source": "anaf",
+        "source_status": "fallback",
+        "cached": False,
+        "stale": False,
+    },
+}
+
 RATE_LIMIT_HEADERS = {
     "x-ratelimit-limit": "100",
     "x-ratelimit-remaining": "99",

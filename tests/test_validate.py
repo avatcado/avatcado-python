@@ -12,7 +12,13 @@ from avatcado import (
     UpstreamError,
     ValidationError,
 )
-from tests.conftest import BASE_URL, MOCK_API_KEY, RATE_LIMIT_HEADERS, VALID_RESPONSE
+from tests.conftest import (
+    BASE_URL,
+    FALLBACK_RESPONSE,
+    MOCK_API_KEY,
+    RATE_LIMIT_HEADERS,
+    VALID_RESPONSE,
+)
 
 
 class TestValidateSuccess:
@@ -96,6 +102,11 @@ class TestValidateMeta:
         result = client.vat.validate("NL123456789B01")
         assert result.meta.request_id == "req_abc123"
         assert result.meta.request_duration_ms == 150
+        assert result.meta.source == "vies"
+        assert result.meta.source_status == "live"
+        assert result.meta.cached is False
+        assert result.meta.stale is False
+        assert result.meta.cached_at is None
         client.close()
 
     @respx.mock(base_url=BASE_URL)
@@ -120,6 +131,7 @@ class TestValidateMeta:
         assert result.meta.cached is True
         assert result.meta.cached_at == "2026-03-18T11:00:00Z"
         assert result.meta.stale is False
+        assert result.meta.source == "vies"
         assert result.meta.source_status == "cached"
         client.close()
 
@@ -166,6 +178,8 @@ class TestValidateMeta:
         client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.meta.mode == "test"
+        assert result.meta.source == "test"
+        assert result.meta.source_status == "live"
         client.close()
 
     @respx.mock(base_url=BASE_URL)
@@ -200,6 +214,90 @@ class TestValidateMeta:
         client = Avatcado(MOCK_API_KEY)
         result = client.vat.validate("NL123456789B01")
         assert result.meta.source_status == "degraded"
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_fallback_response(self, respx_mock: respx.MockRouter) -> None:
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(200, json=FALLBACK_RESPONSE, headers=RATE_LIMIT_HEADERS)
+        )
+        client = Avatcado(MOCK_API_KEY)
+        result = client.vat.validate("RO555555555", requester_vat_number="DE987654321")
+        assert result.data.valid is True
+        assert result.data.consultation_number is None
+        assert result.meta.source == "anaf"
+        assert result.meta.source_status == "fallback"
+        assert result.meta.cached is False
+        assert result.meta.stale is False
+        assert result.meta.cached_at is None
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_fallback_name_only_registry(self, respx_mock: respx.MockRouter) -> None:
+        # Lithuania (vmi) and Latvia (vid) return the company name but no address.
+        resp = {
+            "data": {
+                "valid": True,
+                "vat_number": "LT100001919017",
+                "country_code": "LT",
+                "company": {"name": "Test UAB", "address": None},
+                "requested_at": "2026-03-18T12:00:00Z",
+            },
+            "meta": {**FALLBACK_RESPONSE["meta"], "source": "vmi"},
+        }
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
+        )
+        client = Avatcado(MOCK_API_KEY)
+        result = client.vat.validate("LT100001919017")
+        assert result.meta.source == "vmi"
+        assert result.meta.source_status == "fallback"
+        assert result.data.company is not None
+        assert result.data.company.name == "Test UAB"
+        assert result.data.company.address is None
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_unavailable_within_ttl_is_not_stale(self, respx_mock: respx.MockRouter) -> None:
+        resp = {
+            "data": VALID_RESPONSE["data"],
+            "meta": {
+                "request_id": "req_unavail",
+                "request_duration_ms": 3,
+                "source": "vies",
+                "source_status": "unavailable",
+                "cached": True,
+                "stale": False,
+                "cached_at": "2026-03-17T11:00:00Z",
+            },
+        }
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
+        )
+        client = Avatcado(MOCK_API_KEY)
+        result = client.vat.validate("NL123456789B01")
+        assert result.meta.source_status == "unavailable"
+        assert result.meta.cached is True
+        assert result.meta.stale is False
+        assert result.meta.cached_at == "2026-03-17T11:00:00Z"
+        client.close()
+
+    @respx.mock(base_url=BASE_URL)
+    def test_older_server_without_source_fields(self, respx_mock: respx.MockRouter) -> None:
+        resp = {
+            "data": VALID_RESPONSE["data"],
+            "meta": {"request_id": "req_old", "request_duration_ms": 12},
+        }
+        respx_mock.get("/v1/validate").mock(
+            return_value=httpx.Response(200, json=resp, headers=RATE_LIMIT_HEADERS)
+        )
+        client = Avatcado(MOCK_API_KEY)
+        result = client.vat.validate("NL123456789B01")
+        assert result.meta.request_id == "req_old"
+        assert result.meta.source is None
+        assert result.meta.source_status is None
+        assert result.meta.cached is None
+        assert result.meta.stale is None
         client.close()
 
 

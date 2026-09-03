@@ -63,6 +63,23 @@ SourceStatus = Literal["live", "cached", "unavailable", "degraded", "fallback"]
 
 @dataclass
 class ResponseMeta:
+    """Top-level ``meta`` of a successful response.
+
+    Only ``request_id`` is guaranteed on every response. On a 200 from ``vat.validate()``
+    the current API always sends ``source``, ``source_status``, ``cached`` and ``stale``;
+    ``cached_at`` is present exactly when ``cached`` is true. ``mode`` is ``"test"`` with a
+    test API key, ``request_duration_ms`` accompanies validate/batch responses and ``count``
+    only ``rates.list()``. The batch envelope and the rates endpoints never carry the source
+    fields (per-item batch metadata lives on :class:`BatchItemMeta`). Every field except
+    ``request_id`` is ``None`` when the server omits it, e.g. on older API versions.
+
+    ``source`` names the registry that produced the served data: ``vies``, ``hmrc``, ``bfs``,
+    ``brreg``, ``abr``, a national registry (``dgfip``, ``prh``, ``kas``, ``anaf``, ``ares``,
+    ``vid``, ``vmi``) when ``source_status`` is ``"fallback"``, or ``test`` in test mode. It is
+    a free-form string rather than an enum. It is declared last to keep the positional
+    parameter order of earlier releases.
+    """
+
     request_id: str
     cached: Optional[bool] = None
     cached_at: Optional[str] = None
@@ -71,6 +88,7 @@ class ResponseMeta:
     mode: Optional[Literal["test"]] = None
     request_duration_ms: Optional[int] = None
     count: Optional[int] = None
+    source: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ResponseMeta:
@@ -83,6 +101,7 @@ class ResponseMeta:
             mode=data.get("mode"),
             request_duration_ms=data.get("request_duration_ms"),
             count=data.get("count"),
+            source=data.get("source"),
         )
 
 

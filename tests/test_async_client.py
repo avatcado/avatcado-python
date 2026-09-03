@@ -36,6 +36,7 @@ class TestAsyncValidate:
             assert result.data.vat_number == "NL123456789B01"
             assert result.data.company is not None
             assert result.meta.request_id == "req_abc123"
+            assert result.meta.source == "vies"
             assert result.rate_limit.limit == 100
 
     @respx.mock(base_url=BASE_URL)

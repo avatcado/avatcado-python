@@ -90,6 +90,7 @@ class TestResponseMeta:
                 "cached": True,
                 "cached_at": "2026-03-18T11:00:00Z",
                 "stale": False,
+                "source": "vies",
                 "source_status": "live",
                 "mode": "test",
                 "request_duration_ms": 150,
@@ -98,6 +99,7 @@ class TestResponseMeta:
         assert m.request_id == "req_123"
         assert m.cached is True
         assert m.stale is False
+        assert m.source == "vies"
         assert m.source_status == "live"
         assert m.mode == "test"
 
@@ -105,7 +107,20 @@ class TestResponseMeta:
         m = ResponseMeta.from_dict({"request_id": "req_456"})
         assert m.request_id == "req_456"
         assert m.cached is None
+        assert m.source is None
         assert m.source_status is None
+
+    def test_from_dict_null_source_tolerated(self) -> None:
+        m = ResponseMeta.from_dict({"request_id": "req_456", "source": None})
+        assert m.source is None
+
+    def test_positional_construction_unchanged(self) -> None:
+        # The eight pre-0.6 positional parameters keep their order; source is appended.
+        m = ResponseMeta("req_1", True, "2026-03-18T11:00:00Z", False, "cached", None, 5, None)
+        assert m.request_id == "req_1"
+        assert m.count is None
+        assert m.source is None
+        assert ResponseMeta("req_1", source="anaf").source == "anaf"
 
     def test_from_dict_with_count(self) -> None:
         m = ResponseMeta.from_dict({"request_id": "req_789", "count": 27})
