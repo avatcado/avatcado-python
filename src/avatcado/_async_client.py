@@ -6,6 +6,7 @@ from typing import Optional, Type
 import httpx
 
 from avatcado._async_resources.async_vat import AsyncVatAsyncResource
+from avatcado._async_resources.eori import AsyncEoriResource
 from avatcado._async_resources.rates import AsyncRatesResource
 from avatcado._async_resources.vat import AsyncVatResource
 from avatcado._config import AvatcadoConfig
@@ -16,6 +17,7 @@ class AsyncAvatcado:
 
     vat: AsyncVatResource
     rates: AsyncRatesResource
+    eori: AsyncEoriResource
     async_vat: AsyncVatAsyncResource
 
     def __init__(
@@ -32,6 +34,7 @@ class AsyncAvatcado:
         )
         self.vat = AsyncVatResource(self._http, self._config)
         self.rates = AsyncRatesResource(self._http, self._config)
+        self.eori = AsyncEoriResource(self._http, self._config)
         self.async_vat = AsyncVatAsyncResource(self._http, self._config)
 
     async def close(self) -> None:

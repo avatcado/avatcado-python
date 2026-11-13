@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+EORI number checks. Additive, no breaking changes.
+
+- `avatcado.eori.validate(eori_number, *, cache=True, request_id=None)` on `Avatcado` and `AsyncAvatcado`, for `GET /v1/eori/validate`. Checks one EORI number: GB with HMRC, the 27 EU member states and XI with the European Commission's EORI validation service. Returns `EoriValidateResponse` with `data` (`valid`, `eori_number`, `country_code`, `company`, `requested_at`), `meta` and `rate_limit`. `company` is `None` when the holder published no details
+- `meta.source` is `"ec_eos"`, `"hmrc"` or `"test"`; `meta.source_status` is `"live"`, `"cached"` or `"unavailable"` (the register was down and a stored answer was served). Every `EoriResponseMeta` field except `request_id` is `None` when the server omits it
+- `AvatcadoError.eori_number` (`Optional[str]`): the normalized EORI number echoed by the API on errors from `eori.validate()`. `None` on every other error
+- Error code `invalid_eori_format` (HTTP 422) raises `ValidationError`
+- New exports: `EoriValidateResponse`, `EoriValidationResult`, `EoriResponseMeta`, `EoriSourceStatus`
+
 ## 0.6.0
 
 Meta now reports which registry answered and distinguishes cache hits from national-registry fallback. Additive — no breaking changes.

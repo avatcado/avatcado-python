@@ -7,6 +7,7 @@ import httpx
 
 from avatcado._config import AvatcadoConfig
 from avatcado._resources.async_vat import VatAsyncResource
+from avatcado._resources.eori import EoriResource
 from avatcado._resources.rates import RatesResource
 from avatcado._resources.vat import VatResource
 
@@ -16,6 +17,7 @@ class Avatcado:
 
     vat: VatResource
     rates: RatesResource
+    eori: EoriResource
     async_vat: VatAsyncResource
 
     def __init__(
@@ -32,6 +34,7 @@ class Avatcado:
         )
         self.vat = VatResource(self._http, self._config)
         self.rates = RatesResource(self._http, self._config)
+        self.eori = EoriResource(self._http, self._config)
         self.async_vat = VatAsyncResource(self._http, self._config)
 
     def close(self) -> None:

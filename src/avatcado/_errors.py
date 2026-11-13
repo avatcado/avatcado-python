@@ -13,6 +13,9 @@ class AvatcadoError(Exception):
     API rejected the request before reading it (``unauthorized``, ``forbidden``,
     ``key_revoked``), on batch-level errors, on client-side errors, when no VAT number
     was submitted, and on responses from API versions that predate these fields.
+
+    ``eori_number`` echoes the normalized EORI number on errors from ``eori.validate()``
+    and is ``None`` on every other error.
     """
 
     def __init__(
@@ -35,6 +38,7 @@ class AvatcadoError(Exception):
         self.details = details
         self.vat_number = vat_number
         self.requester_vat_number = requester_vat_number
+        self.eori_number: Optional[str] = None
 
     def __str__(self) -> str:
         return self.message
@@ -136,13 +140,35 @@ _AUTHENTICATION_CODES = frozenset(
     ["unauthorized", "tier_insufficient", "forbidden", "key_revoked"]
 )
 _VALIDATION_CODES = frozenset(
-    ["invalid_vat_format", "missing_parameter", "validation_error", "invalid_json"]
+    [
+        "invalid_vat_format",
+        "invalid_eori_format",
+        "missing_parameter",
+        "validation_error",
+        "invalid_json",
+    ]
 )
 _RATE_LIMIT_CODES = frozenset(["rate_limit_exceeded", "burst_limit_exceeded"])
 _UPSTREAM_CODES = frozenset(["upstream_unavailable", "upstream_member_state_unavailable"])
 
 
 def _raise_for_error(
+    status_code: int,
+    body: Any,
+    headers: Any,
+) -> None:
+    try:
+        _raise_classified(status_code, body, headers)
+    except AvatcadoError as error:
+        # Set after construction so the error classes keep their constructor signatures.
+        error_obj = body.get("error", body) if isinstance(body, dict) else None
+        eori_number = error_obj.get("eori_number") if isinstance(error_obj, dict) else None
+        if isinstance(eori_number, str):
+            error.eori_number = eori_number
+        raise
+
+
+def _raise_classified(
     status_code: int,
     body: Any,
     headers: Any,

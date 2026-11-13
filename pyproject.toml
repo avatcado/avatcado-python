@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "avatcado"
 dynamic = ["version"]
-description = "Official Python SDK for the Avatcado VAT validation API"
+description = "Official Python SDK for the Avatcado VAT and EORI validation API"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"

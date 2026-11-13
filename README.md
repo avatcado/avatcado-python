@@ -146,6 +146,29 @@ print(result.data.standard_rate)  # 21
 print(result.data.other_rates)    # [OtherRate(rate=9, type="reduced"), ...]
 ```
 
+### `avatcado.eori.validate(eori_number)`
+
+Check an EORI number (the customs identifier a business needs to import or export goods). GB numbers are checked with HMRC; numbers from the 27 EU member states and XI are checked with the European Commission's EORI validation service. An EORI number is a separate registration from a VAT number.
+
+```python
+result = avatcado.eori.validate(
+    "GB123456789000",
+    cache=False,  # optional: skip the cache and ask the register again
+)
+
+print(result.data.valid)          # True
+print(result.data.eori_number)    # "GB123456789000"
+print(result.data.company)        # None when the holder published no details
+print(result.meta.source)         # "hmrc" or "ec_eos"
+print(result.meta.source_status)  # "live", "cached" or "unavailable"
+```
+
+`company` is `None` for many valid numbers: both registers publish a name and address only when the holder consented. Spaces, dots, dashes and casing are normalized by the API, and a Greek number sent with the VAT prefix `EL` is checked under the EORI prefix `GR`.
+
+When the register is down, the API serves the most recent stored answer with `source_status` `"unavailable"`, or raises `UpstreamError` when it has none. With `cache=False` a stored answer is never served.
+
+A malformed number raises `ValidationError` with code `invalid_eori_format`. One number per call; there is no batch or async-delivery variant. `AsyncAvatcado` has the same method: `await avatcado.eori.validate(...)`.
+
 ## Async Usage
 
 ```python
@@ -214,6 +237,7 @@ e.request_id            # Request ID (string or None)
 e.docs_url              # Link to error documentation (string, empty if not provided)
 e.details               # Validation details: list of {"field": ..., "message": ...} dicts, or None
 e.vat_number            # Normalized VAT number from the failed request (string or None)
+e.eori_number           # Normalized EORI number, on errors from eori.validate() (string or None)
 e.requester_vat_number  # Normalized requester VAT number from the request (string or None)
 ```
 
