@@ -91,7 +91,7 @@ class TestEoriValidate:
         assert route.calls.last.request.url.params["eori_number"] == "gb 123.456.789 000"
 
     @respx.mock(base_url=BASE_URL)
-    def test_sends_cache_false_only_when_the_cache_is_off(
+    def test_sends_the_cache_flag_as_set_and_nothing_when_unset(
         self, respx_mock: respx.MockRouter
     ) -> None:
         route = respx_mock.get("/v1/eori/validate").mock(
@@ -101,6 +101,8 @@ class TestEoriValidate:
             client.eori.validate("GB123456789000", cache=False)
             assert route.calls.last.request.url.params["cache"] == "false"
             client.eori.validate("GB123456789000", cache=True)
+            assert route.calls.last.request.url.params["cache"] == "true"
+            client.eori.validate("GB123456789000")
             assert "cache" not in route.calls.last.request.url.params
 
     @respx.mock(base_url=BASE_URL)

@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Optional
 
 import httpx
 
-from avatcado._base_client import build_headers, handle_response, parse_rate_limit
+from avatcado import _operations as ops
+from avatcado._base_client import arequest
 from avatcado._config import AvatcadoConfig
-from avatcado._errors import AvatcadoError, ValidationError
-from avatcado._types import (
-    EoriResponseMeta,
-    EoriValidateResponse,
-    EoriValidationResult,
-    _require_key,
-)
+from avatcado._types import EoriValidateResponse
 
 
 class AsyncEoriResource:
@@ -24,45 +19,14 @@ class AsyncEoriResource:
         self,
         eori_number: str,
         *,
-        cache: bool = True,
+        cache: Optional[bool] = None,
         request_id: Optional[str] = None,
     ) -> EoriValidateResponse:
         """Check one EORI number against the register that issued it.
 
         GB numbers are checked with HMRC; numbers from the 27 EU member states and XI with
         the European Commission's EORI validation service. Pass ``cache=False`` to skip the
-        cache and ask the register again.
+        cache and ask the register again. Unset means the API default (the cache is used).
         """
-        if not eori_number or not eori_number.strip():
-            raise ValidationError(
-                "eori_number is required",
-                code="missing_parameter",
-                status_code=400,
-            )
-
-        params: Dict[str, str] = {"eori_number": eori_number.strip()}
-        if cache is False:
-            params["cache"] = "false"
-
-        try:
-            response = await self._http.get(
-                "/v1/eori/validate",
-                params=params,
-                headers=build_headers(self._config.api_key, request_id),
-            )
-        except httpx.TimeoutException:
-            raise AvatcadoError(
-                f"Request timed out after {self._config.timeout}s",
-                code="timeout",
-                status_code=0,
-            )
-        except httpx.HTTPError as exc:
-            raise AvatcadoError(str(exc), code="network_error", status_code=0)
-
-        body = handle_response(response)
-        context = "EoriValidateResponse"
-        return EoriValidateResponse(
-            data=EoriValidationResult.from_dict(_require_key(body, "data", context)),
-            meta=EoriResponseMeta.from_dict(_require_key(body, "meta", context)),
-            rate_limit=parse_rate_limit(response.headers),
-        )
+        call = ops.eori_validate_call(eori_number, cache, request_id)
+        return ops.parse_eori_validate(await arequest(self._http, self._config, call))

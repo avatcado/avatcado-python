@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import httpx
 
-from avatcado._base_client import build_headers, handle_response, parse_rate_limit
+from avatcado import _operations as ops
+from avatcado._base_client import request
 from avatcado._config import AvatcadoConfig
-from avatcado._errors import AvatcadoError, ValidationError
-from avatcado._types import (
-    AsyncBatchData,
-    AsyncBatchValidateResponse,
-    AsyncMeta,
-    AsyncValidateData,
-    AsyncValidateResponse,
-)
+from avatcado._types import AsyncBatchValidateResponse, AsyncValidateResponse
 
 
 class VatAsyncResource:
+    """Queued validation: the API accepts the request and delivers the result by webhook.
+
+    "Async" here names the API's queued endpoints, not Python's ``async``. This resource is
+    blocking on :class:`avatcado.Avatcado` and awaitable on :class:`avatcado.AsyncAvatcado`.
+    """
+
     def __init__(self, http: httpx.Client, config: AvatcadoConfig) -> None:
         self._http = http
         self._config = config
@@ -26,83 +26,31 @@ class VatAsyncResource:
         vat_number: str,
         *,
         requester_vat_number: Optional[str] = None,
-        cache: bool = True,
+        cache: Optional[bool] = None,
+        fallback: Optional[bool] = None,
         request_id: Optional[str] = None,
     ) -> AsyncValidateResponse:
-        if not vat_number or not vat_number.strip():
-            raise ValidationError(
-                "vat_number is required",
-                code="missing_parameter",
-                status_code=400,
-            )
-
-        body: Dict[str, Any] = {"vat_number": vat_number.strip()}
-        if requester_vat_number is not None:
-            body["requester_vat_number"] = requester_vat_number
-        if cache is False:
-            body["cache"] = False
-
-        try:
-            response = self._http.post(
-                "/v1/validate/async",
-                json=body,
-                headers=build_headers(self._config.api_key, request_id),
-            )
-        except httpx.TimeoutException:
-            raise AvatcadoError(
-                f"Request timed out after {self._config.timeout}s",
-                code="timeout",
-                status_code=0,
-            )
-        except httpx.HTTPError as exc:
-            raise AvatcadoError(str(exc), code="network_error", status_code=0)
-
-        data = handle_response(response)
-        return AsyncValidateResponse(
-            data=AsyncValidateData.from_dict(data["data"]),
-            meta=AsyncMeta.from_dict(data["meta"]),
-            rate_limit=parse_rate_limit(response.headers),
+        """Queue one VAT number. ``cache`` and ``fallback`` behave as on ``vat.validate()``."""
+        call = ops.async_validate_call(
+            vat_number, requester_vat_number, cache, fallback, request_id
         )
+        return ops.parse_async_validate(request(self._http, self._config, call))
 
     def validate_batch(
         self,
         vat_numbers: List[str],
         *,
         requester_vat_number: Optional[str] = None,
-        cache: bool = True,
+        cache: Optional[bool] = None,
+        fallback: Optional[bool] = None,
         request_id: Optional[str] = None,
     ) -> AsyncBatchValidateResponse:
-        if not vat_numbers:
-            raise ValidationError(
-                "At least one VAT number is required",
-                code="missing_parameter",
-                status_code=400,
-            )
+        """Queue up to 200 (Pro) or 1,000 (Business) VAT numbers.
 
-        body: Dict[str, Any] = {"vat_numbers": [v.strip() for v in vat_numbers]}
-        if requester_vat_number is not None:
-            body["requester_vat_number"] = requester_vat_number
-        if cache is False:
-            body["cache"] = False
-
-        try:
-            response = self._http.post(
-                "/v1/validate/async/batch",
-                json=body,
-                headers=build_headers(self._config.api_key, request_id),
-            )
-        except httpx.TimeoutException:
-            raise AvatcadoError(
-                f"Request timed out after {self._config.timeout}s",
-                code="timeout",
-                status_code=0,
-            )
-        except httpx.HTTPError as exc:
-            raise AvatcadoError(str(exc), code="network_error", status_code=0)
-
-        data = handle_response(response)
-        return AsyncBatchValidateResponse(
-            data=AsyncBatchData.from_dict(data["data"]),
-            meta=AsyncMeta.from_dict(data["meta"]),
-            rate_limit=parse_rate_limit(response.headers),
+        Rejected items come back flat: ``item.vat_number``, ``item.error_code`` and
+        ``item.error_message``.
+        """
+        call = ops.async_validate_batch_call(
+            vat_numbers, requester_vat_number, cache, fallback, request_id
         )
+        return ops.parse_async_validate_batch(request(self._http, self._config, call))

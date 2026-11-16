@@ -77,7 +77,7 @@ class TestAsyncValidateSuccess:
         client.close()
 
     @respx.mock(base_url=BASE_URL)
-    def test_does_not_send_cache_when_true(self, respx_mock: respx.MockRouter) -> None:
+    def test_does_not_send_cache_when_omitted(self, respx_mock: respx.MockRouter) -> None:
         route = respx_mock.post("/v1/validate/async").mock(
             return_value=httpx.Response(
                 202, json=ASYNC_SINGLE_RESPONSE, headers=RATE_LIMIT_HEADERS

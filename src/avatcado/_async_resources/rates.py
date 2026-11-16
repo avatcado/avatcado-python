@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-from urllib.parse import quote
+from typing import Optional
 
 import httpx
 
-from avatcado._base_client import build_headers, handle_response, parse_rate_limit
+from avatcado import _operations as ops
+from avatcado._base_client import arequest
 from avatcado._config import AvatcadoConfig
-from avatcado._errors import AvatcadoError
-from avatcado._types import (
-    GetRateResponse,
-    ListRatesResponse,
-    ResponseMeta,
-    VatRate,
-)
+from avatcado._types import GetRateResponse, ListRatesResponse
 
 
 class AsyncRatesResource:
@@ -20,46 +15,12 @@ class AsyncRatesResource:
         self._http = http
         self._config = config
 
-    async def list(self) -> ListRatesResponse:
-        try:
-            response = await self._http.get(
-                "/v1/rates",
-                headers=build_headers(self._config.api_key),
-            )
-        except httpx.TimeoutException:
-            raise AvatcadoError(
-                f"Request timed out after {self._config.timeout}s",
-                code="timeout",
-                status_code=0,
-            )
-        except httpx.HTTPError as exc:
-            raise AvatcadoError(str(exc), code="network_error", status_code=0)
+    async def list(self, *, request_id: Optional[str] = None) -> ListRatesResponse:
+        """VAT rates for every supported country."""
+        call = ops.list_rates_call(request_id)
+        return ops.parse_list_rates(await arequest(self._http, self._config, call))
 
-        data = handle_response(response)
-        return ListRatesResponse(
-            data=[VatRate.from_dict(r) for r in data["data"]],
-            meta=ResponseMeta.from_dict(data["meta"]),
-            rate_limit=parse_rate_limit(response.headers),
-        )
-
-    async def get(self, country_code: str) -> GetRateResponse:
-        try:
-            response = await self._http.get(
-                f"/v1/rates/{quote(country_code, safe='')}",
-                headers=build_headers(self._config.api_key),
-            )
-        except httpx.TimeoutException:
-            raise AvatcadoError(
-                f"Request timed out after {self._config.timeout}s",
-                code="timeout",
-                status_code=0,
-            )
-        except httpx.HTTPError as exc:
-            raise AvatcadoError(str(exc), code="network_error", status_code=0)
-
-        data = handle_response(response)
-        return GetRateResponse(
-            data=VatRate.from_dict(data["data"]),
-            meta=ResponseMeta.from_dict(data["meta"]),
-            rate_limit=parse_rate_limit(response.headers),
-        )
+    async def get(self, country_code: str, *, request_id: Optional[str] = None) -> GetRateResponse:
+        """VAT rates for one country, by two-letter code."""
+        call = ops.get_rate_call(country_code, request_id)
+        return ops.parse_get_rate(await arequest(self._http, self._config, call))

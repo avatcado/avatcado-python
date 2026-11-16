@@ -8,11 +8,18 @@ if TYPE_CHECKING:
 
 
 def _require_key(data: Dict[str, Any], key: str, context: str) -> Any:
+    """``data[key]``, or a ``parse_error`` when the key is missing or ``data`` is no object."""
+    from avatcado._errors import AvatcadoError
+
+    if not isinstance(data, dict):
+        raise AvatcadoError(
+            f"Expected an object for {context} but received {type(data).__name__}",
+            code="parse_error",
+            status_code=0,
+        )
     try:
         return data[key]
     except KeyError:
-        from avatcado._errors import AvatcadoError
-
         raise AvatcadoError(
             f"Missing required field '{key}' in {context} response",
             code="parse_error",
@@ -74,9 +81,10 @@ class ResponseMeta:
     ``request_id`` is ``None`` when the server omits it, e.g. on older API versions.
 
     ``source`` names the registry that produced the served data: ``vies``, ``hmrc``, ``bfs``,
-    ``brreg``, ``abr``, a national registry (``dgfip``, ``prh``, ``kas``, ``anaf``, ``ares``,
-    ``vid``, ``vmi``) when ``source_status`` is ``"fallback"``, or ``test`` in test mode. It is
-    a free-form string rather than an enum. It is declared last to keep the positional
+    ``brreg``, ``abr``, a national registry (``anaf``, ``ares``, ``dgfip``, ``fssr``, ``furs``,
+    ``kbo``, ``porezna``, ``prh``, ``rik``, ``vid``) when ``source_status`` is ``"fallback"``,
+    or ``test`` in test mode. It is a free-form string rather than an enum: new registries
+    appear without an SDK release. It is declared last to keep the positional
     parameter order of earlier releases.
     """
 
