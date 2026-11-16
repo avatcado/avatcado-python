@@ -8,11 +8,18 @@ if TYPE_CHECKING:
 
 
 def _require_key(data: Dict[str, Any], key: str, context: str) -> Any:
+    """``data[key]``, or a ``parse_error`` when the key is missing or ``data`` is no object."""
+    from avatcado._errors import AvatcadoError
+
+    if not isinstance(data, dict):
+        raise AvatcadoError(
+            f"Expected an object for {context} but received {type(data).__name__}",
+            code="parse_error",
+            status_code=0,
+        )
     try:
         return data[key]
     except KeyError:
-        from avatcado._errors import AvatcadoError
-
         raise AvatcadoError(
             f"Missing required field '{key}' in {context} response",
             code="parse_error",
@@ -74,9 +81,10 @@ class ResponseMeta:
     ``request_id`` is ``None`` when the server omits it, e.g. on older API versions.
 
     ``source`` names the registry that produced the served data: ``vies``, ``hmrc``, ``bfs``,
-    ``brreg``, ``abr``, a national registry (``dgfip``, ``prh``, ``kas``, ``anaf``, ``ares``,
-    ``vid``, ``vmi``) when ``source_status`` is ``"fallback"``, or ``test`` in test mode. It is
-    a free-form string rather than an enum. It is declared last to keep the positional
+    ``brreg``, ``abr``, a national registry (``anaf``, ``ares``, ``dgfip``, ``fssr``, ``furs``,
+    ``kbo``, ``porezna``, ``prh``, ``rik``, ``vid``) when ``source_status`` is ``"fallback"``,
+    or ``test`` in test mode. It is a free-form string rather than an enum: new registries
+    appear without an SDK release. It is declared last to keep the positional
     parameter order of earlier releases.
     """
 
@@ -105,6 +113,71 @@ class ResponseMeta:
         )
 
 
+# How an EORI answer was obtained: a fresh check, a cache hit, or (``unavailable``) the most
+# recent stored answer served while the register was down.
+EoriSourceStatus = Literal["live", "cached", "unavailable"]
+
+
+@dataclass
+class EoriValidationResult:
+    """Result of ``eori.validate()``.
+
+    ``company`` is ``None`` when the number is not valid, and ``None`` for a valid number whose
+    holder did not consent to publication, which is common. ``eori_number`` is the normalized
+    number that was checked: a Greek number sent with ``EL`` comes back with ``GR``.
+    """
+
+    valid: bool
+    eori_number: str
+    country_code: str
+    company: Optional[Company]
+    requested_at: str
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> EoriValidationResult:
+        company_data = data.get("company")
+        company = Company.from_dict(company_data) if company_data is not None else None
+        return cls(
+            valid=_require_key(data, "valid", "EoriValidationResult"),
+            eori_number=_require_key(data, "eori_number", "EoriValidationResult"),
+            country_code=_require_key(data, "country_code", "EoriValidationResult"),
+            company=company,
+            requested_at=_require_key(data, "requested_at", "EoriValidationResult"),
+        )
+
+
+@dataclass
+class EoriResponseMeta:
+    """``meta`` of a successful ``eori.validate()`` response.
+
+    ``source`` names the register that answered: ``ec_eos`` (the European Commission's EORI
+    validation service, for EU and XI numbers), ``hmrc`` (GB numbers), or ``test`` in test
+    mode. Every field except ``request_id`` is ``None`` when the server omits it.
+    """
+
+    request_id: str
+    source: Optional[str] = None
+    source_status: Optional[EoriSourceStatus] = None
+    cached: Optional[bool] = None
+    stale: Optional[bool] = None
+    cached_at: Optional[str] = None
+    mode: Optional[Literal["test"]] = None
+    request_duration_ms: Optional[int] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> EoriResponseMeta:
+        return cls(
+            request_id=_require_key(data, "request_id", "EoriResponseMeta"),
+            source=data.get("source"),
+            source_status=data.get("source_status"),
+            cached=data.get("cached"),
+            stale=data.get("stale"),
+            cached_at=data.get("cached_at"),
+            mode=data.get("mode"),
+            request_duration_ms=data.get("request_duration_ms"),
+        )
+
+
 @dataclass
 class RateLimitInfo:
     limit: Optional[int]
@@ -119,6 +192,13 @@ class RateLimitInfo:
 class ValidateResponse:
     data: VatValidationResult
     meta: ResponseMeta
+    rate_limit: RateLimitInfo
+
+
+@dataclass
+class EoriValidateResponse:
+    data: EoriValidationResult
+    meta: EoriResponseMeta
     rate_limit: RateLimitInfo
 
 

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.7.0
+
+EORI number checks, the `fallback` argument, opt-in retries, and fixes for request options the SDK could not send. No breaking changes; see "Changed" for two behaviours that differ from 0.6.0.
+
+### Added
+
+- `avatcado.eori.validate(eori_number, *, cache=None, request_id=None)` on `Avatcado` and `AsyncAvatcado`, for `GET /v1/eori/validate`. Checks one EORI number: GB with HMRC, the 27 EU member states and XI with the European Commission's EORI validation service. Returns `EoriValidateResponse` with `data` (`valid`, `eori_number`, `country_code`, `company`, `requested_at`), `meta` and `rate_limit`. `company` is `None` when the holder published no details
+- `meta.source` is `"ec_eos"`, `"hmrc"` or `"test"`; `meta.source_status` is `"live"`, `"cached"` or `"unavailable"` (the register was down and a stored answer was served). Every `EoriResponseMeta` field except `request_id` is `None` when the server omits it
+- `AvatcadoError.eori_number` (`Optional[str]`): the normalized EORI number echoed by the API on errors from `eori.validate()`. `None` on every other error
+- Error code `invalid_eori_format` (HTTP 422) raises `ValidationError`
+- New exports: `EoriValidateResponse`, `EoriValidationResult`, `EoriResponseMeta`, `EoriSourceStatus`
+- `fallback` (`Optional[bool]`) on `vat.validate()`, `vat.validate_batch()`, `async_vat.validate()` and `async_vat.validate_batch()`. `False` stops a VIES outage from being answered by a national register; `True` next to `requester_vat_number` accepts a register answer. Pro and Business plans
+- Opt-in retries: client arguments `max_retries` (default `0`, off) and `max_retry_delay` (default `60` seconds) on `Avatcado` and `AsyncAvatcado`. A burst-limit 429 and a 503 are retried on every method; a timeout, a network error, a 502 and a 504 on GET requests only. The SDK waits for `Retry-After`, otherwise 0.5 s doubling up to 8 s. See the README section "Timeouts and retries"
+- `AvatcadoError.retry_after` (`Optional[float]`) on the base class and every subclass, not only `RateLimitError` and `UpstreamError`. The API also sends `Retry-After` on a 503 `internal_error`
+- `rates.list()` and `rates.get()` accept `request_id`, sent as `X-Request-Id`
+- `tests/test_live.py`: runs the SDK against a real API in test mode when `AVATCADO_TEST_API_KEY` is set
+- CI workflow: ruff, black, mypy and pytest on Python 3.9 to 3.13 for every pull request
+
+### Changed
+
+- `cache` is now `Optional[bool] = None` on every method (it was `bool = True`), and an explicit `cache=True` is sent to the API. Before, `cache` was sent only when `False`, so the documented way to opt back in to cached and stored results next to `requester_vat_number` did nothing. Code that passes `cache=True` together with `requester_vat_number` now gets what it asked for: a cached result when one exists. Leaving `cache` unset is unchanged
+- Keys with the legacy `vtly_live_` / `vtly_test_` prefix no longer trigger the "may indicate an invalid key" warning. The API accepts them permanently
+
+### Fixed
+
+- A `2xx` body that does not have the documented shape raises `AvatcadoError(code="parse_error")` with the HTTP status and request id, on every method. Before, `vat.validate()`, `vat.validate_batch()`, both `async_vat` methods and both `rates` methods raised a bare `KeyError` or `TypeError`, and `eori.validate()` reported `status_code` 0
+- An error response without a JSON body (a gateway answering for the API) keeps `request_id` from the `X-Request-Id` header and `retry_after` from `Retry-After`. Both were dropped
+- `retry_after` is `None` for a `Retry-After` header that is not a number of seconds or an HTTP date. `nan` and `inf` were accepted as numbers
+- README: the national register list matches the API (`kas` and `vmi` never existed), `async_vat.validate_batch()` documents the flat shape of rejected items
+
 ## 0.6.0
 
 Meta now reports which registry answered and distinguishes cache hits from national-registry fallback. Additive — no breaking changes.

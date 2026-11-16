@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import math
+import time
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Optional
 
 
@@ -13,6 +16,13 @@ class AvatcadoError(Exception):
     API rejected the request before reading it (``unauthorized``, ``forbidden``,
     ``key_revoked``), on batch-level errors, on client-side errors, when no VAT number
     was submitted, and on responses from API versions that predate these fields.
+
+    ``eori_number`` echoes the normalized EORI number on errors from ``eori.validate()``
+    and is ``None`` on every other error.
+
+    ``retry_after`` is the number of seconds the API asks you to wait before retrying, from
+    the ``Retry-After`` header. It is ``None`` when the response carried none, and on
+    client-side errors.
     """
 
     def __init__(
@@ -35,6 +45,8 @@ class AvatcadoError(Exception):
         self.details = details
         self.vat_number = vat_number
         self.requester_vat_number = requester_vat_number
+        self.eori_number: Optional[str] = None
+        self.retry_after: Optional[float] = None
 
     def __str__(self) -> str:
         return self.message
@@ -132,17 +144,63 @@ class UpstreamError(AvatcadoError):
         self.validation_id = validation_id
 
 
+def parse_retry_after(headers: Any) -> Optional[float]:
+    """Read ``Retry-After`` as seconds.
+
+    The API sends whole seconds; a proxy may send an HTTP date, which is converted to seconds
+    from now. Anything else (text, a negative number, ``nan``, ``inf``) is ``None``.
+    """
+    raw = headers.get("retry-after") if hasattr(headers, "get") else None
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        seconds = float(raw)
+    except ValueError:
+        try:
+            when = parsedate_to_datetime(raw)
+        except (TypeError, ValueError):
+            return None
+        return max(0.0, when.timestamp() - time.time())
+    if not math.isfinite(seconds) or seconds < 0:
+        return None
+    return seconds
+
+
 _AUTHENTICATION_CODES = frozenset(
     ["unauthorized", "tier_insufficient", "forbidden", "key_revoked"]
 )
 _VALIDATION_CODES = frozenset(
-    ["invalid_vat_format", "missing_parameter", "validation_error", "invalid_json"]
+    [
+        "invalid_vat_format",
+        "invalid_eori_format",
+        "missing_parameter",
+        "validation_error",
+        "invalid_json",
+    ]
 )
 _RATE_LIMIT_CODES = frozenset(["rate_limit_exceeded", "burst_limit_exceeded"])
 _UPSTREAM_CODES = frozenset(["upstream_unavailable", "upstream_member_state_unavailable"])
 
 
 def _raise_for_error(
+    status_code: int,
+    body: Any,
+    headers: Any,
+) -> None:
+    try:
+        _raise_classified(status_code, body, headers)
+    except AvatcadoError as error:
+        # Set after construction so the error classes keep their constructor signatures.
+        error_obj = body.get("error", body) if isinstance(body, dict) else None
+        eori_number = error_obj.get("eori_number") if isinstance(error_obj, dict) else None
+        if isinstance(eori_number, str):
+            error.eori_number = eori_number
+        if error.retry_after is None:
+            error.retry_after = parse_retry_after(headers)
+        raise
+
+
+def _raise_classified(
     status_code: int,
     body: Any,
     headers: Any,
@@ -158,9 +216,12 @@ def _raise_for_error(
         if not isinstance(meta, dict):
             meta = {}
 
-    message: str = error_obj.get("message", f"HTTP {status_code}")
-    code: str = error_obj.get("code", "unknown_error")
-    docs_url: str = error_obj.get("docs_url", "")
+    message_raw = error_obj.get("message")
+    message: str = message_raw if isinstance(message_raw, str) else f"HTTP {status_code}"
+    code_raw = error_obj.get("code")
+    code: str = code_raw if isinstance(code_raw, str) else "unknown_error"
+    docs_url_raw = error_obj.get("docs_url")
+    docs_url: str = docs_url_raw if isinstance(docs_url_raw, str) else ""
     details_raw = error_obj.get("details")
     details: Optional[List[Dict[str, str]]] = (
         details_raw if isinstance(details_raw, list) else None
@@ -173,13 +234,7 @@ def _raise_for_error(
     if request_id is None and hasattr(headers, "get"):
         request_id = headers.get("x-request-id")
 
-    retry_after_raw = headers.get("retry-after") if hasattr(headers, "get") else None
-    retry_after: Optional[float] = None
-    if retry_after_raw is not None:
-        try:
-            retry_after = float(retry_after_raw)
-        except (ValueError, TypeError):
-            pass
+    retry_after = parse_retry_after(headers)
 
     if code in _AUTHENTICATION_CODES:
         raise AuthenticationError(
